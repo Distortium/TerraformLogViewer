@@ -1,0 +1,68 @@
+﻿@page "/viewer"
+@inject IWebHostEnvironment Env
+@using TerraformLogViewer.Services
+@using TerraformLogViewer.Models
+<h3>LogViewer</h3>
+
+<DependencyGraph ParsedLog=_parsedLog></DependencyGraph>
+<button onclick="@HandleLogUpload">Click</button>
+<button onclick="@ClearLog">Clear</button>
+
+@code {
+    [Inject] private ILogParserService LogParserService { get; set; } = null!;
+
+    private TerraformLog? _parsedLog;
+    private bool _isLoading = false;
+    private string _logContent = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLogFile();
+    }
+
+    private async Task HandleLogUpload()
+    {
+        if (string.IsNullOrWhiteSpace(_logContent))
+            return;
+
+        _isLoading = true;
+
+        try
+        {
+            _parsedLog = await LogParserService.ParseLogAsync(_logContent);
+            Console.WriteLine(_parsedLog);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            // Обработка ошибок парсинга
+            Console.WriteLine($"Error parsing log: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ClearLog()
+    {
+        _parsedLog = null;
+        _logContent = string.Empty;
+    }
+
+    private async Task LoadLogFile()
+    {
+        try
+        {
+            // Путь к файлу: в папке Data относительно корня приложения
+            var filePath = Path.Combine(Env.ContentRootPath, "Models", "terraform.log");
+
+            // Читаем файл
+            _logContent = await File.ReadAllTextAsync(filePath);
+        }
+        catch (Exception ex)
+        {
+            _logContent = $"Ошибка чтения файла: {ex.Message}";
+        }
+    }
+}
