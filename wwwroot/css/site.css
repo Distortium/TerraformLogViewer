@@ -66,3 +66,397 @@ a, .btn-link {
     .blazor-error-boundary::after {
         content: "An error has occurred."
     }
+/* Minimal wave effect for inputs - simplified */
+.wave-effect .mud-input-root.mud-input-outlined {
+    transition: border-color 0.3s ease;
+}
+
+/* Simple button transitions */
+.slow-transition.mud-button-root {
+    transition: background-color 0.4s ease !important;
+}
+
+/* Stars layer */
+.stars-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.9;
+    z-index: 3;
+}
+
+/* White, bright stars as requested */
+.star {
+    position: absolute;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 0 10px rgba(255,255,255,0.9), 0 0 20px rgba(255,255,255,0.5);
+    animation: star-minimal 4s ease-in-out infinite;
+    transform-origin: center center;
+}
+
+@keyframes star-minimal {
+    0%, 100% {
+        opacity: 0.6;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+}
+
+/* Aurora (kept subtle for dark theme) */
+.aurora {
+    position: absolute;
+    left: -20%;
+    top: 0%;
+    width: 140%;
+    height: 100%;
+    pointer-events: none;
+    opacity: 0.6;
+    transition: opacity 1s ease;
+    background: linear-gradient(135deg, rgba(120,220,255,0.0) 0%, rgba(120,200,255,0.03) 30%, rgba(100,240,200,0.05) 50%, rgba(180,220,255,0.03) 70%, rgba(120,220,255,0.0) 100%);
+    filter: blur(40px);
+    z-index: 1;
+}
+
+/* Left side panel that holds half of a large Mars */
+.side-panel {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    height: 100vh;
+    padding: 1.5rem;
+}
+
+/* Make left panel wider on md+ */
+@media (min-width: 768px) {
+    .side-panel.md\\:w-1\\/2 {
+        width: 50%;
+    }
+}
+
+/* Container that clips the SVG to show half/wide Mars */
+.mars-half {
+    width: 100%;
+    height: 75vh; /* occupy 3/4 of viewport height */
+    max-width: 720px;
+    overflow: hidden;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+}
+
+    /* SVG sized to show the planet without cutting its left part */
+    .mars-half svg {
+        width: 180%;
+        height: 180%;
+        transform: translateX(0%);
+        display: block;
+    }
+
+        /* Apply rotation and glow animation to the grouped planet shapes */
+        .mars-half svg .mars-planet {
+            transform-box: fill-box;
+            transform-origin: 50% 50%;
+            will-change: transform, filter;
+            animation: mars-rotate 20s linear infinite, mars-glow 3.6s ease-in-out infinite;
+        }
+
+/* Rotation keyframes */
+@keyframes mars-rotate {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Glow pulse via CSS filter */
+@keyframes mars-glow {
+    0% {
+        filter: drop-shadow(0 0 6px rgba(255,120,80,0.18));
+    }
+
+    50% {
+        filter: drop-shadow(0 0 20px rgba(255,140,90,0.45));
+    }
+
+    100% {
+        filter: drop-shadow(0 0 6px rgba(255,120,80,0.18));
+    }
+}
+
+/* Separator stripe between left Mars area and content */
+.separator {
+    width: 4px;
+    height: 75vh; /* match mars-half height */
+    background: #000000;
+    align-self: center;
+    z-index: 4;
+    margin: 0 0.5rem;
+    border-radius: 2px;
+}
+
+/* Content (right) area should sit above left panel */
+.right-panel {
+    z-index: 6;
+    position: relative;
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Terraforming title at top-right inside right-panel */
+.title-top-right {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 10;
+}
+
+/* Darker, minimal module overlay */
+.module-overlay {
+    background-color: rgba(0,0,0,0.3);
+    z-index: 5;
+}
+
+/* Much darker content container for minimalism */
+.content-container {
+    position: relative;
+    z-index: 7;
+    backdrop-filter: blur(4px);
+    background: rgba(0,0,0,0.8);
+    border-radius: 12px;
+    padding: 2rem;
+    border: 1px solid rgba(255,255,255,0.05);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .content-container {
+        padding: 1.5rem;
+        margin: 1rem;
+        background: rgba(0,0,0,0.95);
+    }
+
+    .aurora {
+        opacity: 0;
+    }
+
+    .side-panel {
+        display: none;
+    }
+
+    .separator {
+        display: none;
+    }
+}
+/* Minimal wave effect for inputs - simplified */
+.wave-effect .mud-input-root.mud-input-outlined {
+    transition: border-color 0.3s ease;
+}
+
+/* Simple button transitions */
+.slow-transition.mud-button-root {
+    transition: background-color 0.4s ease !important;
+}
+
+/* Stars layer */
+.stars-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.9;
+    z-index: 3;
+}
+
+/* White, bright stars as requested */
+.star {
+    position: absolute;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 0 10px rgba(255,255,255,0.9), 0 0 20px rgba(255,255,255,0.5);
+    animation: star-minimal 4s ease-in-out infinite;
+    transform-origin: center center;
+}
+
+@keyframes star-minimal {
+    0%, 100% {
+        opacity: 0.6;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+}
+
+/* Aurora (kept subtle for dark theme) */
+.aurora {
+    position: absolute;
+    left: -20%;
+    top: 0%;
+    width: 140%;
+    height: 100%;
+    pointer-events: none;
+    opacity: 0.6;
+    transition: opacity 1s ease;
+    background: linear-gradient(135deg, rgba(120,220,255,0.0) 0%, rgba(120,200,255,0.03) 30%, rgba(100,240,200,0.05) 50%, rgba(180,220,255,0.03) 70%, rgba(120,220,255,0.0) 100%);
+    filter: blur(40px);
+    z-index: 1;
+}
+
+/* Left side panel that holds half of a large Mars */
+.side-panel {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    height: 100vh;
+    padding: 1.5rem;
+}
+
+/* Make left panel wider on md+ */
+@media (min-width: 768px) {
+    .side-panel.md\\:w-1\\/2 {
+        width: 50%;
+    }
+}
+
+/* Container that clips the SVG to show half/wide Mars */
+.mars-half {
+    width: 100%;
+    height: 75vh; /* occupy 3/4 of viewport height */
+    max-width: 720px;
+    overflow: hidden;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+}
+
+    /* SVG sized to show the planet without cutting its left part */
+    .mars-half svg {
+        width: 180%;
+        height: 180%;
+        transform: translateX(0%);
+        display: block;
+    }
+
+        /* Apply rotation and glow animation to the grouped planet shapes */
+        .mars-half svg .mars-planet {
+            transform-box: fill-box;
+            transform-origin: 50% 50%;
+            will-change: transform, filter;
+            animation: mars-rotate 20s linear infinite, mars-glow 3.6s ease-in-out infinite;
+        }
+
+/* Rotation keyframes */
+@keyframes mars-rotate {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Glow pulse via CSS filter */
+@keyframes mars-glow {
+    0% {
+        filter: drop-shadow(0 0 6px rgba(255,120,80,0.18));
+    }
+
+    50% {
+        filter: drop-shadow(0 0 20px rgba(255,140,90,0.45));
+    }
+
+    100% {
+        filter: drop-shadow(0 0 6px rgba(255,120,80,0.18));
+    }
+}
+
+/* Separator stripe between left Mars area and content */
+.separator {
+    width: 4px;
+    height: 75vh; /* match mars-half height */
+    background: #000000;
+    align-self: center;
+    z-index: 4;
+    margin: 0 0.5rem;
+    border-radius: 2px;
+}
+
+/* Content (right) area should sit above left panel */
+.right-panel {
+    z-index: 6;
+    position: relative;
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Terraforming title at top-right inside right-panel */
+.title-top-right {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 10;
+}
+
+/* Darker, minimal module overlay */
+.module-overlay {
+    background-color: rgba(0,0,0,0.3);
+    z-index: 5;
+}
+
+/* Much darker content container for minimalism */
+.content-container {
+    position: relative;
+    z-index: 7;
+    backdrop-filter: blur(4px);
+    background: rgba(0,0,0,0.8);
+    border-radius: 12px;
+    padding: 2rem;
+    border: 1px solid rgba(255,255,255,0.05);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .content-container {
+        padding: 1.5rem;
+        margin: 1rem;
+        background: rgba(0,0,0,0.95);
+    }
+
+    .aurora {
+        opacity: 0;
+    }
+
+    .side-panel {
+        display: none;
+    }
+
+    .separator {
+        display: none;
+    }
+}

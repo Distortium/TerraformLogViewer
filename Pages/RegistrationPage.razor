@@ -1,0 +1,540 @@
+@page "/register"
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+@inject NavigationManager NavManager
+
+<div class="page-container">
+    <!-- Subtle aurora effect -->
+    <div class="aurora" aria-hidden="true"></div>
+
+    <!-- White stars in the background -->
+    <div class="stars-container">
+        <div class="stars-layer">
+            @foreach (var s in Stars)
+            {
+                <span class="star" style="@($"left:{s.Left}%; top:{s.Top}%; width:{s.Size}px; height:{s.Size}px; animation-delay:{s.Delay}s")"></span>
+            }
+        </div>
+    </div>
+
+    <!-- Two-column layout -->
+    <div class="main-content">
+        <!-- Left panel with Mars illustration - исправлено -->
+        <div class="side-panel" aria-hidden="true">
+            <div class="mars-container">
+                <svg viewBox="0 0 1600 1200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                    <defs>
+                        <linearGradient id="marsGradSide" x1="0%" x2="100%" y1="0%" y2="100%">
+                            <stop offset="0%" stop-color="#f59a6b" />
+                            <stop offset="40%" stop-color="#d14f2e" />
+                            <stop offset="100%" stop-color="#4a1810" />
+                        </linearGradient>
+                        <radialGradient id="marsGlossSide" cx="30%" cy="25%" r="70%">
+                            <stop offset="0%" stop-color="rgba(255,255,255,0.22)" />
+                            <stop offset="60%" stop-color="rgba(120,200,255,0.06)" />
+                            <stop offset="100%" stop-color="rgba(255,255,255,0)" />
+                        </radialGradient>
+                    </defs>
+
+                    <g class="mars-planet">
+                        <!-- Основной круг Марса - увеличен и смещен вверх -->
+                        <circle cx="800" cy="500" r="550" fill="url(#marsGradSide)" />
+                        <circle cx="800" cy="500" r="550" fill="url(#marsGlossSide)" opacity="0.12" />
+
+                        <!-- Craters -->
+                        <circle cx="560" cy="360" r="38" fill="rgba(0,0,0,0.15)" />
+                        <circle cx="860" cy="420" r="28" fill="rgba(0,0,0,0.13)" />
+                        <circle cx="680" cy="300" r="22" fill="rgba(0,0,0,0.14)" />
+                        <circle cx="920" cy="280" r="18" fill="rgba(0,0,0,0.12)" />
+                        <circle cx="740" cy="520" r="30" fill="rgba(0,0,0,0.16)" />
+                        <circle cx="620" cy="440" r="16" fill="rgba(0,0,0,0.12)" />
+                        <circle cx="1000" cy="560" r="20" fill="rgba(0,0,0,0.13)" />
+                        <circle cx="880" cy="620" r="12" fill="rgba(0,0,0,0.10)" />
+                        <circle cx="720" cy="380" r="10" fill="rgba(0,0,0,0.11)" />
+                    </g>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Right panel: content and form with transparent background -->
+        <div class="right-panel">
+            <!-- Title -->
+            <div class="title-top-right">
+                <h6 class="terraforming">Terraforming</h6>
+            </div>
+
+            <div class="content-container">
+                <div class="form-stack">
+                    <!-- Language label above the small Mars icon -->
+                    <p class="form-subtitle">@(_language == "EN" ? "Registration" : "Регистрация")</p>
+
+                    <!-- Small, static Mars icon -->
+                    <div class="mars-icon-container">
+                        <div class="mars-icon" aria-hidden="true" title="Mars">
+                            <svg width="40" height="40" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">
+                                <defs>
+                                    <radialGradient id="marsIconGrad" cx="30%" cy="30%" r="70%">
+                                        <stop offset="0%" stop-color="#f07b4a" />
+                                        <stop offset="60%" stop-color="#9e2b1b" />
+                                        <stop offset="100%" stop-color="#4a1810" />
+                                    </radialGradient>
+                                </defs>
+                                <circle cx="32" cy="32" r="28" fill="url(#marsIconGrad)" />
+                                <circle cx="24" cy="22" r="3" fill="rgba(0,0,0,0.2)" />
+                                <circle cx="42" cy="28" r="2.5" fill="rgba(0,0,0,0.2)" />
+                                <circle cx="34" cy="40" r="4" fill="rgba(0,0,0,0.15)" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- Email field -->
+                    <div class="form-field">
+                        <input type="email" class="form-input" @bind-value="_email" placeholder=" " />
+                        <label class="form-label">@(_language == "EN" ? "Email" : "Эл. почта")</label>
+                    </div>
+
+                    <!-- Password field -->
+                    <div class="form-field">
+                        <input type="password" class="form-input" @bind-value="_password" placeholder=" " />
+                        <label class="form-label">@(_language == "EN" ? "Password" : "Пароль")</label>
+                    </div>
+
+                    <!-- Forgot password link -->
+                    <div class="forgot-container">
+                        <a href="#" class="forgot-link">
+                            @(_language == "EN" ? "Forgot password?" : "Забыли пароль?")
+                        </a>
+                    </div>
+
+                    <!-- Submit button -->
+                    <button class="submit-button slow-transition">
+                        @(_language == "EN" ? "Begin Terraforming" : "Начать Terraforming")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Language switch button bottom-right -->
+    <button class="lang-toggle" @onclick="ToggleLanguage" aria-label="Toggle language">
+        @_language
+    </button>
+</div>
+
+<style>
+    /* Reset and base styles */
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    /* Main container - занимает 100% высоты экрана без скролла */
+    .page-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: #000000;
+        overflow: hidden;
+    }
+
+    /* Aurora background effect */
+    .aurora {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(45deg, rgba(216, 67, 21, 0.15) 0%, rgba(255, 112, 67, 0.12) 25%, rgba(0, 0, 0, 0) 50%, rgba(216, 67, 21, 0.08) 75%, rgba(255, 112, 67, 0.15) 100%);
+        background-size: 400% 400%;
+        animation: aurora-shift 15s ease infinite;
+        z-index: 1;
+    }
+
+    @@keyframes aurora-shift {
+        0% {
+            background-position: 0% 50%;
+        }
+
+        50% {
+            background-position: 100% 50%;
+        }
+
+        100% {
+            background-position: 0% 50%;
+        }
+    }
+
+    /* Stars container - адаптирован под любой экран */
+    .stars-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 2;
+    }
+
+    .stars-layer {
+        position: relative;
+        width: 100%;
+        height: 100%;
+    }
+
+    .star {
+        position: absolute;
+        background-color: white;
+        border-radius: 50%;
+        animation: twinkle 3s infinite;
+        opacity: 0;
+    }
+
+    @@keyframes twinkle {
+        0% {
+            opacity: 0;
+        }
+
+        50% {
+            opacity: 1;
+        }
+
+        100% {
+            opacity: 0;
+        }
+    }
+
+    /* Main content layout */
+    .main-content {
+        position: relative;
+        display: flex;
+        width: 100%;
+        height: 100%;
+        z-index: 3;
+    }
+
+    /* Side panel with Mars - исправлено для полного покрытия без черных областей */
+    .side-panel {
+        display: none;
+        width: 50%;
+        position: relative;
+        overflow: visible; /* Разрешаем выход за границы */
+    }
+
+    .mars-container {
+        position: absolute;
+        top: -10%; /* Смещаем вверх чтобы убрать черную область снизу */
+        left: -10%;
+        width: 120%;
+        height: 120%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+        .mars-container svg {
+            width: 100%;
+            height: 100%;
+            min-width: 600px;
+        }
+
+    .mars-planet {
+        animation: mars-rotate 30s alternate infinite;
+    }
+
+    @@keyframes mars-rotate {
+        from {
+            transform: rotate(5deg);
+        }
+
+        to {
+            transform: rotate(20deg);
+        }
+    }
+
+    /* Right panel - полностью прозрачный фон */
+    .right-panel {
+        position: relative;
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        padding: 20px;
+        background: transparent;
+    }
+
+    .title-top-right {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        z-index: 10;
+    }
+
+    .terraforming {
+        font-size: 1.25rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        color: white;
+    }
+
+    /* Form styling - с полупрозрачным фоном только для формы */
+    .content-container {
+        width: 100%;
+        max-width: 400px;
+        z-index: 2;
+        padding: 40px 30px;
+        background: rgba(10, 10, 10, 0.4);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .form-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .form-subtitle {
+        font-size: 1.25rem;
+        font-weight: 500;
+        color: rgb(209, 213, 219);
+        text-align: center;
+        margin-bottom: 10px;
+    }
+
+    .mars-icon-container {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 10px;
+    }
+
+    .form-field {
+        position: relative;
+        margin-bottom: 20px;
+    }
+
+    .form-label {
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        background-color: transparent;
+        padding: 0 8px;
+        font-size: 1rem;
+        color: rgba(255, 255, 255, 0.7);
+        transition: all 0.2s;
+        pointer-events: none;
+    }
+
+    .form-input {
+        width: 100%;
+        padding: 16px;
+        background-color: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        color: white;
+        font-size: 1rem;
+        transition: all 0.3s;
+    }
+
+        /* Эффект для плавающих label */
+        .form-input:focus ~ .form-label,
+        .form-input:not(:placeholder-shown) ~ .form-label {
+            top: -10px;
+            left: 12px;
+            font-size: 0.875rem;
+            background-color: rgba(10, 10, 10, 0.9);
+            color: #D84315;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #D84315;
+            box-shadow: 0 0 0 2px rgba(216, 67, 21, 0.2);
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+
+    /* Forgot password link */
+    .forgot-container {
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .forgot-link {
+        font-size: 0.875rem;
+        color: rgb(156, 163, 175);
+        text-decoration: none;
+        transition: color 0.2s;
+    }
+
+        .forgot-link:hover {
+            color: rgb(229, 231, 235);
+        }
+
+    /* Submit button */
+    .submit-button {
+        width: 100%;
+        padding: 16px;
+        background-color: #D84315;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1.125rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+        .submit-button:hover {
+            background-color: #BF360C;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(216, 67, 21, 0.3);
+        }
+
+    .slow-transition {
+        transition: all 0.5s ease;
+    }
+
+    /* Language toggle */
+    .lang-toggle {
+        position: fixed;
+        bottom: 16px;
+        right: 16px;
+        z-index: 50;
+        padding: 8px 16px;
+        background-color: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+        color: white;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .lang-toggle:hover {
+            border-color: rgba(255, 255, 255, 0.5);
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+    /* Media queries for responsive design */
+    @@media (min-width: 768px) {
+        .side-panel {
+            display: block;
+        }
+
+        .title-top-right {
+            display: block;
+        }
+        /* Увеличиваем Марс на больших экранах */
+        .mars-container {
+            top: -15%;
+            left: -15%;
+            width: 130%;
+            height: 130%;
+        }
+    }
+
+    @@media (max-height: 700px) {
+        .content-container {
+            padding: 30px 25px;
+            transform: scale(0.9);
+        }
+
+        .mars-container {
+            top: -5%;
+            height: 110%;
+        }
+    }
+
+    @@media (max-height: 600px) {
+        .content-container {
+            transform: scale(0.85);
+            padding: 25px 20px;
+        }
+
+        .mars-container {
+            top: 0;
+            height: 100%;
+        }
+    }
+
+    @@media (max-width: 480px) {
+        .right-panel {
+            padding: 10px;
+        }
+
+        .content-container {
+            padding: 30px 20px;
+        }
+
+        .form-input {
+            padding: 14px;
+        }
+
+        .submit-button {
+            padding: 14px;
+        }
+    }
+
+    /* Для очень широких экранов - улучшаем отображение Марса */
+    @@media (min-width: 1400px) {
+        .mars-container {
+            top: -20%;
+            left: -20%;
+            width: 140%;
+            height: 140%;
+        }
+    }
+</style>
+
+@code {
+    private string _email;
+    private string _password;
+    private string _language = "EN";
+
+    private List<StarModel> Stars = new();
+
+    protected override void OnInitialized()
+    {
+        Stars = StarsViewModel.GenerateStars(50);
+    }
+
+    private void ToggleLanguage()
+    {
+        _language = _language == "EN" ? "RU" : "EN";
+    }
+
+    public class StarModel
+    {
+        public double Left { get; set; }
+        public double Top { get; set; }
+        public double Size { get; set; }
+        public double Delay { get; set; }
+    }
+
+    public static class StarsViewModel
+    {
+        private static Random random = new Random();
+
+        public static List<StarModel> GenerateStars(int count)
+        {
+            var stars = new List<StarModel>();
+
+            for (int i = 0; i < count; i++)
+            {
+                stars.Add(new StarModel
+                {
+                    Left = random.Next(0, 100),
+                    Top = random.Next(0, 100),
+                    Size = random.Next(1, 4),
+                    Delay = random.NextDouble() * 5
+                });
+            }
+
+            return stars;
+        }
+    }
+}
