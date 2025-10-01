@@ -1,0 +1,405 @@
+﻿@page "/logs/{LogFileId:guid}"
+@inject VisualizationService VisualizationService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@using LogLevel = TerraformLogViewer.Models.LogLevel;
+
+<PageTitle>Terraform Log Analyzer - Log Visualization</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <!-- Панель поиска и фильтров -->
+        <div class="col-md-3">
+            <div class="card search-panel">
+                <div class="card-header">
+                    <h5>Search & Filters</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Full Text Search</label>
+                        <input @bind="searchCriteria.FreeText" 
+                               @bind:event="oninput"
+                               class="form-control" 
+                               placeholder="Search in all logs..." />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Resource Type</label>
+                        <input @bind="searchCriteria.TfResourceType" 
+                               @bind:event="oninput"
+                               class="form-control" 
+                               placeholder="e.g., t1_compute_instance" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Time Range</label>
+                        <div class="row">
+                            <div class="col-6">
+                                <label class="form-label small">From</label>
+                                <input type="datetime-local" 
+                                       @bind="startTime"
+                                       class="form-control form-control-sm" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">To</label>
+                                <input type="datetime-local" 
+                                       @bind="endTime"
+                                       class="form-control form-control-sm" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Log Level</label>
+                        <select @bind="selectedLogLevel" class="form-select">
+                            <option value="">All Levels</option>
+                            <option value="Error">Error</option>
+                            <option value="Warn">Warning</option>
+                            <option value="Info">Info</option>
+                            <option value="Debug">Debug</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Terraform Phase</label>
+                        <select @bind="selectedPhase" class="form-select">
+                            <option value="">All Phases</option>
+                            <option value="Plan">Plan</option>
+                            <option value="Apply">Apply</option>
+                            <option value="Init">Init</option>
+                            <option value="Destroy">Destroy</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" 
+                               @bind="searchCriteria.UnreadOnly"
+                               class="form-check-input" />
+                        <label class="form-check-label">Show Unread Only</label>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button @onclick="SearchLogs" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                        <button @onclick="ClearFilters" class="btn btn-outline-secondary">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Статистика -->
+            <div class="card mt-3" id="statistics-panel">
+                <div class="card-header">
+                    <h6>Statistics</h6>
+                </div>
+                <div class="card-body">
+                    <div class="small">
+                        <div>Total Results: <strong>@totalRecords</strong></div>
+                        <div>Errors: <span class="text-danger"><strong>@errorCount</strong></span></div>
+                        <div>Warnings: <span class="text-warning"><strong>@warningCount</strong></span></div>
+                        <div>Unread: <strong>@unreadCount</strong></div>
+                        <div>Current Page: <strong>@currentPage of @totalPages</strong></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Основная панель с логами -->
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>Log Entries</h5>
+                    <div>
+                        <button @onclick="ShowLogView" class="btn @(currentView == ViewType.List ? "btn-primary" : "btn-outline-primary") btn-sm">
+                            <i class="fas fa-list"></i> List View
+                        </button>
+                        <button @onclick="ShowTimelineView" class="btn @(currentView == ViewType.Timeline ? "btn-primary" : "btn-outline-primary") btn-sm">
+                            <i class="fas fa-chart-bar"></i> Timeline
+                        </button>
+                    </div>
+                </div>
+
+                @if (currentView == ViewType.List)
+                {
+                    <div class="card-body">
+                        <!-- Панель управления пагинацией -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="small text-muted">Show</span>
+                                <select @bind:get="pageSize" @bind:set="OnPageSizeChanged" class="form-select form-select-sm" style="width: 65px;">
+                                    <option value="10">10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                                <span class="small text-muted">entries per page</span>
+                            </div>
+                            
+                            <div class="small text-muted">
+                                Showing @startRecord to @endRecord of @totalRecords entries
+                            </div>
+                        </div>
+
+                        @if (isLoading)
+                        {
+                            <div class="text-center py-4">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <div class="mt-2 text-muted">Loading log entries...</div>
+                            </div>
+                        }
+                        else if (!pagedResults.Any())
+                        {
+                            <div class="text-center text-muted py-5">
+                                <i class="fas fa-inbox fa-3x mb-3"></i>
+                                <p>No log entries found. Try adjusting your search criteria.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="log-entries">
+                                @foreach (var entry in pagedResults)
+                                {
+                                    <LogEntryView Entry="entry" 
+                                                 OnMarkAsRead="MarkAsRead"
+                                                 OnMarkAsUnread="MarkAsUnread" />
+                                }
+                            </div>
+
+                            <!-- Пагинация -->
+                            @if (totalPages > 1)
+                            {
+                                <nav aria-label="Log entries pagination" class="mt-4">
+                                    <ul class="pagination justify-content-center mb-0">
+                                        <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                            <button class="page-link" @onclick="() => ChangePage(1)" aria-label="First">
+                                                <i class="fas fa-angle-double-left"></i>
+                                            </button>
+                                        </li>
+                                        <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                            <button class="page-link" @onclick="() => ChangePage(currentPage - 1)" aria-label="Previous">
+                                                <i class="fas fa-angle-left"></i>
+                                            </button>
+                                        </li>
+
+                                        @foreach (var pageNum in GetVisiblePages())
+                                        {
+                                            <li class="page-item @(pageNum == currentPage ? "active" : "")">
+                                                <button class="page-link" @onclick="() => ChangePage(pageNum)">@pageNum</button>
+                                            </li>
+                                        }
+
+                                        <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                            <button class="page-link" @onclick="() => ChangePage(currentPage + 1)" aria-label="Next">
+                                                <i class="fas fa-angle-right"></i>
+                                            </button>
+                                        </li>
+                                        <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                            <button class="page-link" @onclick="() => ChangePage(totalPages)" aria-label="Last">
+                                                <i class="fas fa-angle-double-right"></i>
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </nav>
+                            }
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="card-body">
+                        <TimelineView LogFileId="LogFileId" />
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid LogFileId { get; set; }
+
+    private enum ViewType { List, Timeline }
+    private ViewType currentView = ViewType.List;
+
+    private List<LogEntry> currentResults = new();
+    private List<LogEntry> pagedResults = new();
+    private VisualizationService.SearchCriteria searchCriteria = new();
+    private bool isLoading = false;
+
+    private string selectedLogLevel = "";
+    private string selectedPhase = "";
+    private DateTime? startTime = null;
+    private DateTime? endTime = null;
+
+    // Пагинация
+    private int currentPage = 1;
+    private int pageSize = 25;
+    private int totalRecords = 0;
+    private int totalPages = 0;
+    private int startRecord = 0;
+    private int endRecord = 0;
+
+    private int errorCount = 0;
+    private int warningCount = 0;
+    private int unreadCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInitialData();
+    }
+
+    private async Task LoadInitialData()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        // Получаем все результаты для текущих критериев поиска
+        currentResults = await VisualizationService.SearchLogsAsync(LogFileId, searchCriteria);
+        totalRecords = currentResults.Count;
+
+        UpdateStatistics();
+        UpdatePagination();
+        UpdatePagedResults();
+
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private void UpdatePagedResults()
+    {
+        // Применяем пагинацию к результатам
+        pagedResults = currentResults
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+
+        startRecord = totalRecords == 0 ? 0 : ((currentPage - 1) * pageSize + 1);
+        endRecord = Math.Min(currentPage * pageSize, totalRecords);
+    }
+
+    private void UpdatePagination()
+    {
+        totalPages = (int)Math.Ceiling((double)totalRecords / pageSize);
+
+        if (totalPages == 0)
+        {
+            totalPages = 1;
+        }
+
+        // Ограничиваем текущую страницу допустимыми значениями
+        currentPage = Math.Max(1, Math.Min(currentPage, totalPages));
+    }
+
+    private List<int> GetVisiblePages()
+    {
+        var pages = new List<int>();
+        const int maxVisiblePages = 5;
+
+        int startPage = Math.Max(1, currentPage - (maxVisiblePages / 2));
+        int endPage = Math.Min(totalPages, startPage + maxVisiblePages - 1);
+
+        // Корректируем startPage если endPage достиг максимума
+        if (endPage - startPage + 1 < maxVisiblePages && startPage > 1)
+        {
+            startPage = Math.Max(1, endPage - maxVisiblePages + 1);
+        }
+
+        for (int i = startPage; i <= endPage; i++)
+        {
+            pages.Add(i);
+        }
+
+        return pages;
+    }
+
+    private async Task SearchLogs()
+    {
+        // Сбрасываем на первую страницу при новом поиске
+        currentPage = 1;
+
+        // Применяем фильтры из элементов управления UI
+        searchCriteria.MinLogLevel = string.IsNullOrEmpty(selectedLogLevel) 
+            ? null 
+            : Enum.Parse<LogLevel>(selectedLogLevel);
+
+        searchCriteria.Phase = string.IsNullOrEmpty(selectedPhase)
+            ? null
+            : Enum.Parse<TerraformPhase>(selectedPhase);
+
+        searchCriteria.StartTimestamp = startTime;
+        searchCriteria.EndTimestamp = endTime;
+
+        await LoadInitialData();
+    }
+
+    private async Task ClearFilters()
+    {
+        searchCriteria = new VisualizationService.SearchCriteria();
+        selectedLogLevel = "";
+        selectedPhase = "";
+        startTime = null;
+        endTime = null;
+        currentPage = 1;
+        pageSize = 25;
+
+        await LoadInitialData();
+    }
+
+    private void UpdateStatistics()
+    {
+        errorCount = currentResults.Count(e => e.Level == LogLevel.Error);
+        warningCount = currentResults.Count(e => e.Level == LogLevel.Warn);
+        unreadCount = currentResults.Count(e => e.Status == EntryStatus.Unread);
+    }
+
+    private void ShowLogView()
+    {
+        currentView = ViewType.List;
+    }
+
+    private void ShowTimelineView()
+    {
+        currentView = ViewType.Timeline;
+    }
+
+    private async Task MarkAsRead(LogEntry entry)
+    {
+        await VisualizationService.MarkAsReadAsync(entry.Id);
+        entry.Status = EntryStatus.Read;
+        UpdateStatistics();
+        StateHasChanged();
+    }
+
+    private async Task MarkAsUnread(LogEntry entry)
+    {
+        await VisualizationService.MarkAsUnreadAsync(entry.Id);
+        entry.Status = EntryStatus.Unread;
+        UpdateStatistics();
+        StateHasChanged();
+    }
+
+    // Обработчики пагинации
+    private async Task ChangePage(int page)
+    {
+        if (page >= 1 && page <= totalPages && page != currentPage)
+        {
+            currentPage = page;
+            UpdatePagedResults();
+            StateHasChanged();
+
+            // Прокручиваем к верху при смене страницы
+            await JSRuntime.InvokeVoidAsync("scrollToTop");
+        }
+    }
+
+    private async Task OnPageSizeChanged(int newSizePage)
+    {
+        pageSize = newSizePage;
+        currentPage = 1;
+        await LoadInitialData();
+    }
+}

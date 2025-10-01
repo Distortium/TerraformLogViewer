@@ -1,0 +1,576 @@
+﻿/* Log Entry Styles */
+.log-entry {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    background: white;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+    .log-entry:hover {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .log-entry.expanded {
+        border-color: #007bff;
+    }
+
+    .log-entry.unread {
+        border-left: 4px solid #007bff;
+        background-color: #f8f9fa;
+    }
+
+.log-entry-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    flex-wrap: wrap;
+}
+
+/* Log Level Badges */
+.log-level-badge {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.7em;
+    font-weight: bold;
+    color: white;
+    min-width: 50px;
+    text-align: center;
+}
+
+    .log-level-badge.error {
+        background-color: #dc3545;
+    }
+
+    .log-level-badge.warn {
+        background-color: #ffc107;
+        color: #212529;
+    }
+
+    .log-level-badge.info {
+        background-color: #17a2b8;
+    }
+
+    .log-level-badge.debug {
+        background-color: #6c757d;
+    }
+
+    .log-level-badge.trace {
+        background-color: #28a745;
+    }
+
+/* Timestamp and Metadata */
+.timestamp {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+    color: #6c757d;
+    min-width: 180px;
+}
+
+.phase-badge {
+    padding: 2px 6px;
+    background-color: #e9ecef;
+    border-radius: 3px;
+    font-size: 0.7em;
+    color: #495057;
+}
+
+.req-id {
+    font-family: 'Courier New', monospace;
+    background-color: #e3f2fd;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.8em;
+    color: #1565c0;
+}
+
+.resource-type {
+    background-color: #f3e5f5;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.8em;
+    color: #7b1fa2;
+}
+
+.message-preview {
+    flex: 1;
+    font-size: 0.9em;
+    color: #495057;
+}
+
+.log-actions {
+    margin-left: auto;
+}
+
+/* Expanded Details */
+.log-entry-details {
+    padding: 12px;
+    border-top: 1px solid #dee2e6;
+    background-color: #fafafa;
+}
+
+.raw-message pre {
+    font-size: 0.8em;
+    background: white;
+    padding: 8px;
+    border-radius: 3px;
+    border: 1px solid #e9ecef;
+    margin: 0;
+    white-space: pre-wrap;
+}
+
+/* HTTP Data Styles */
+.http-data {
+    margin-top: 12px;
+}
+
+.http-request {
+    padding: 8px;
+    background: white;
+    border-radius: 3px;
+    border: 1px solid #e9ecef;
+    margin-bottom: 8px;
+}
+
+.http-method {
+    background: #007bff;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.8em;
+    font-weight: bold;
+    margin-right: 8px;
+}
+
+.http-url {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    color: #495057;
+}
+
+.http-status {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.8em;
+    font-weight: bold;
+    margin-left: 8px;
+}
+
+.status-success {
+    background-color: #28a745;
+    color: white;
+}
+
+.status-warning {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.status-danger {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* JSON Viewer */
+.json-section {
+    margin-top: 8px;
+}
+
+.json-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: #e9ecef;
+    border-radius: 3px;
+    cursor: pointer;
+    user-select: none;
+}
+
+    .json-header:hover {
+        background: #dee2e6;
+    }
+
+.json-toolbar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.json-content {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 3px;
+    padding: 8px;
+    font-size: 0.8em;
+    max-height: 400px;
+    overflow: auto;
+}
+
+/* Timeline Styles */
+.timeline-container {
+    margin-top: 16px;
+}
+
+.timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.timeline-legend {
+    display: flex;
+    gap: 12px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8em;
+}
+
+.legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}
+
+    .legend-color.success {
+        background-color: #28a745;
+    }
+
+    .legend-color.warning {
+        background-color: #ffc107;
+    }
+
+    .legend-color.error {
+        background-color: #dc3545;
+    }
+
+.timeline {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background: white;
+    padding: 16px;
+}
+
+.timeline-grid {
+    position: relative;
+    min-height: 200px;
+}
+
+.time-labels {
+    position: relative;
+    height: 20px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.time-label {
+    position: absolute;
+    font-size: 0.7em;
+    color: #6c757d;
+    transform: translateX(-50%);
+}
+
+.timeline-item {
+    display: flex;
+    margin-bottom: 8px;
+    align-items: center;
+}
+
+.chain-info {
+    width: 300px;
+    padding-right: 16px;
+    font-size: 0.8em;
+}
+
+.chain-id {
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+}
+
+.chain-resource {
+    color: #6c757d;
+}
+
+.chain-duration {
+    color: #495057;
+}
+
+.chain-bar-container {
+    flex: 1;
+    height: 24px;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 3px;
+    position: relative;
+}
+
+.chain-bar {
+    position: absolute;
+    height: 100%;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+    .chain-bar:hover {
+        opacity: 0.8;
+        transform: scaleY(1.1);
+    }
+
+    .chain-bar.success {
+        background-color: #28a745;
+    }
+
+    .chain-bar.warning {
+        background-color: #ffc107;
+    }
+
+    .chain-bar.error {
+        background-color: #dc3545;
+    }
+
+.chain-bar-inner {
+    height: 100%;
+    width: 100%;
+}
+
+/* Chain Details Modal */
+.chain-entry {
+    display: flex;
+    gap: 8px;
+    padding: 4px 8px;
+    margin-bottom: 2px;
+    border-radius: 3px;
+    font-size: 0.8em;
+}
+
+    .chain-entry.error {
+        background-color: #f8d7da;
+    }
+
+    .chain-entry.warn {
+        background-color: #fff3cd;
+    }
+
+    .chain-entry.info {
+        background-color: #d1ecf1;
+    }
+
+.entry-time {
+    font-family: 'Courier New', monospace;
+    min-width: 80px;
+}
+
+.entry-level {
+    font-weight: bold;
+    min-width: 50px;
+}
+
+/* Fixed Panels - ОСНОВНЫЕ ИСПРАВЛЕНИЯ */
+.search-panel {
+    position: sticky;
+    top: 16px;
+    z-index: 101;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 16px;
+}
+
+#statistics-panel {
+    position: sticky;
+    top: 120px; /* Отступ учитывает высоту search-panel */
+    z-index: 100;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+/* Улучшения для карточек */
+.card {
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 16px;
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 12px 16px;
+    font-weight: 600;
+}
+
+.card-body {
+    padding: 16px;
+}
+
+/* Плавная прокрутка для всего контейнера */
+.container-fluid {
+    position: relative;
+}
+
+/* Убедимся, что основной контент правильно позиционирован */
+.col-md-9 {
+    position: relative;
+    z-index: 1;
+}
+
+.col-md-3 {
+    position: relative;
+    z-index: 2;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .log-entry-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .log-actions {
+        margin-left: 0;
+        margin-top: 8px;
+    }
+
+    .timeline-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .chain-info {
+        width: 100%;
+        margin-bottom: 8px;
+    }
+
+    /* На мобильных убираем фиксацию панелей */
+    #statistics-panel,
+    .search-panel {
+        position: relative;
+        top: 0;
+        max-height: none;
+        overflow-y: visible;
+    }
+
+    .col-md-3 {
+        margin-bottom: 16px;
+    }
+}
+
+/* Улучшения для средних экранов */
+@media (min-width: 769px) and (max-width: 992px) {
+    .search-panel {
+        top: 12px;
+    }
+
+    #statistics-panel {
+        top: 100px;
+    }
+}
+
+/* Улучшения для больших экранов */
+@media (min-width: 1200px) {
+    .search-panel {
+        top: 20px;
+    }
+
+    #statistics-panel {
+        top: 140px;
+    }
+}
+
+/* Стили для пагинации */
+.pagination {
+    margin-bottom: 0;
+}
+
+.page-link {
+    color: #495057;
+    border: 1px solid #dee2e6;
+    padding: 0.375rem 0.75rem;
+}
+
+.page-item.active .page-link {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: white;
+}
+
+.page-link:hover {
+    color: #0056b3;
+    background-color: #e9ecef;
+    border-color: #dee2e6;
+}
+
+.page-item.disabled .page-link {
+    color: #6c757d;
+    pointer-events: none;
+    background-color: #fff;
+    border-color: #dee2e6;
+}
+
+/* Стили для выбора количества элементов на странице */
+.form-select-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 0.25rem;
+}
+
+/* Дополнительные улучшения для лучшего UX */
+.log-entries {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+    /* Скрываем скроллбар для лучшего вида */
+    .log-entries::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .log-entries::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+    }
+
+    .log-entries::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 3px;
+    }
+
+        .log-entries::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+/* Анимация для переключения состояний */
+.log-entry {
+    transition: all 0.3s ease;
+}
+
+    .log-entry.expanded {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+/* Улучшения для статистики */
+#statistics-panel .card-body {
+    padding: 12px;
+}
+
+#statistics-panel .small div {
+    margin-bottom: 6px;
+    padding: 4px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+    #statistics-panel .small div:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+    }

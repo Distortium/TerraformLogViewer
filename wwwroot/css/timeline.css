@@ -1,0 +1,261 @@
+﻿.timeline-container {
+    margin-top: 16px;
+}
+
+.timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding: 0 8px;
+}
+
+.timeline-legend {
+    display: flex;
+    gap: 12px;
+    font-size: 0.8em;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}
+
+    .legend-color.success {
+        background-color: #28a745;
+    }
+
+    .legend-color.warning {
+        background-color: #ffc107;
+    }
+
+    .legend-color.error {
+        background-color: #dc3545;
+    }
+
+.timeline {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background: white;
+    padding: 16px;
+}
+
+.timeline-grid {
+    position: relative;
+    min-height: 200px;
+}
+
+.time-labels {
+    position: relative;
+    height: 20px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.time-label {
+    position: absolute;
+    font-size: 0.7em;
+    color: #6c757d;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+
+.timeline-item {
+    display: flex;
+    margin-bottom: 8px;
+    align-items: center;
+    min-height: 40px;
+}
+
+.chain-info {
+    width: 300px;
+    padding-right: 16px;
+    font-size: 0.8em;
+}
+
+.chain-id {
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.chain-resource {
+    color: #6c757d;
+    font-size: 0.8em;
+}
+
+.chain-duration {
+    color: #495057;
+    font-size: 0.8em;
+}
+
+.chain-errors {
+    font-size: 0.8em;
+    margin-top: 2px;
+}
+
+.chain-bar-container {
+    flex: 1;
+    height: 24px;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 3px;
+    position: relative;
+}
+
+.chain-bar {
+    position: absolute;
+    height: 100%;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 2px;
+}
+
+    .chain-bar:hover {
+        opacity: 0.8;
+        transform: scaleY(1.1);
+    }
+
+    .chain-bar.success {
+        background-color: #28a745;
+    }
+
+    .chain-bar.warning {
+        background-color: #ffc107;
+    }
+
+    .chain-bar.error {
+        background-color: #dc3545;
+    }
+
+.chain-bar-inner {
+    height: 100%;
+    width: 100%;
+}
+
+/* Chain Details Modal */
+.chain-details {
+    font-size: 0.9em;
+}
+
+.detail-row {
+    margin-bottom: 8px;
+    padding: 4px 0;
+}
+
+    .detail-row strong {
+        display: inline-block;
+        width: 120px;
+        color: #495057;
+    }
+
+.chain-entries {
+    border-top: 1px solid #dee2e6;
+    padding-top: 12px;
+}
+
+.chain-entry {
+    display: flex;
+    gap: 12px;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    border-radius: 3px;
+    font-size: 0.8em;
+    align-items: flex-start;
+}
+
+    .chain-entry.error {
+        background-color: #f8d7da;
+        border-left: 3px solid #dc3545;
+    }
+
+    .chain-entry.warn {
+        background-color: #fff3cd;
+        border-left: 3px solid #ffc107;
+    }
+
+    .chain-entry.info {
+        background-color: #d1ecf1;
+        border-left: 3px solid #17a2b8;
+    }
+
+    .chain-entry.debug {
+        background-color: #e2e3e5;
+        border-left: 3px solid #6c757d;
+    }
+
+.entry-time {
+    font-family: 'Courier New', monospace;
+    min-width: 90px;
+    font-size: 0.75em;
+    color: #6c757d;
+}
+
+.entry-level {
+    min-width: 60px;
+}
+
+.level-badge {
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 0.7em;
+    font-weight: bold;
+    color: white;
+}
+
+    .level-badge.error {
+        background-color: #dc3545;
+    }
+
+    .level-badge.warn {
+        background-color: #ffc107;
+        color: #212529;
+    }
+
+    .level-badge.info {
+        background-color: #17a2b8;
+    }
+
+    .level-badge.debug {
+        background-color: #6c757d;
+    }
+
+.entry-message {
+    flex: 1;
+    word-break: break-word;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .timeline-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .timeline-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .chain-info {
+        width: 100%;
+        margin-bottom: 8px;
+    }
+
+    .chain-bar-container {
+        width: 100%;
+    }
+
+    .detail-row strong {
+        width: 100px;
+    }
+}

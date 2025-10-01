@@ -1,0 +1,210 @@
+﻿@inject VisualizationService VisualizationService
+@inject IJSRuntime JSRuntime
+
+<div class="timeline-container">
+    <div class="timeline-header">
+        <h6>Request Timeline</h6>
+        <div class="timeline-legend">
+            <span class="legend-item"><div class="legend-color success"></div> Success</span>
+            <span class="legend-item"><div class="legend-color warning"></div> Warning</span>
+            <span class="legend-item"><div class="legend-color error"></div> Error</span>
+        </div>
+    </div>
+
+    @if (timelineData == null)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading timeline...</span>
+            </div>
+        </div>
+    }
+    else if (!timelineData.Chains.Any())
+    {
+        <div class="text-center text-muted">
+            <p>No request chains found for timeline visualization.</p>
+        </div>
+    }
+    else
+    {
+        <div class="timeline">
+            <div class="timeline-grid">
+                <!-- Time axis labels -->
+                <div class="time-labels">
+                    @for (int i = 0; i <= 10; i++)
+                    {
+                        var time = timelineData.MinTime + TimeSpan.FromTicks(
+                        (timelineData.MaxTime - timelineData.MinTime).Ticks * i / 10);
+                        <div class="time-label" style="left: @(i * 10)%">
+                            @time.ToString("HH:mm:ss.fff")
+                        </div>
+                    }
+                </div>
+
+                <!-- Request chains -->
+                @foreach (var chain in timelineData.Chains)
+                {
+                    var errorCount = chain.Entries.Count(e => e.Level == LogLevel.Error);
+                    var duration = chain.EndTime - chain.StartTime;
+                    var resourceType = chain.Entries.FirstOrDefault(e => !string.IsNullOrEmpty(e.TfResourceType))?.TfResourceType ?? "Unknown";
+
+                    <div class="timeline-item">
+                        <div class="chain-info">
+                            <div class="chain-id">@chain.TfReqId</div>
+                            <div class="chain-resource">@resourceType</div>
+                            <div class="chain-duration">@duration.TotalMilliseconds.ToString("F0") ms</div>
+                            @if (errorCount > 0)
+                            {
+                                <div class="chain-errors text-danger">
+                                    <i class="fas fa-exclamation-triangle"></i> @errorCount errors
+                                </div>
+                            }
+                        </div>
+
+                        <div class="chain-bar-container">
+                            <div class="chain-bar @GetChainBarClass(errorCount)"
+                                 style="width: @GetBarWidth(chain)%; left: @GetBarOffset(chain)%"
+                                 title="@chain.TfReqId - @duration.TotalMilliseconds.ToString("F0") ms"
+                                 @onclick="() => ShowChainDetails(chain)">
+                                <div class="chain-bar-inner"></div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@if (selectedChain != null)
+{
+    <div class="modal fade show" style="display: block; background: rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Request Chain Details</h5>
+                    <button type="button" class="btn-close" @onclick="CloseChainDetails"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="chain-details">
+                        <div class="detail-row">
+                            <strong>Request ID:</strong> @selectedChain.TfReqId
+                        </div>
+                        <div class="detail-row">
+                            <strong>Resource Type:</strong> @GetChainResourceType(selectedChain)
+                        </div>
+                        <div class="detail-row">
+                            <strong>Duration:</strong> @((selectedChain.EndTime - selectedChain.StartTime).TotalMilliseconds.ToString("F0")) ms
+                        </div>
+                        <div class="detail-row">
+                            <strong>Start Time:</strong> @selectedChain.StartTime.ToString("HH:mm:ss.fff")
+                        </div>
+                        <div class="detail-row">
+                            <strong>End Time:</strong> @selectedChain.EndTime.ToString("HH:mm:ss.fff")
+                        </div>
+                        <div class="detail-row">
+                            <strong>Entries:</strong> @selectedChain.Entries.Count
+                        </div>
+                        <div class="detail-row">
+                            <strong>Errors:</strong> <span class="text-danger">@selectedChain.Entries.Count(e => e.Level == LogLevel.Error)</span>
+                        </div>
+
+                        <div class="chain-entries mt-3">
+                            <h6>Log Entries in this Chain:</h6>
+                            <div class="entries-list" style="max-height: 400px; overflow-y: auto;">
+                                @foreach (var entry in selectedChain.Entries.OrderBy(e => e.Timestamp))
+                                {
+                                    <div class="chain-entry @entry.Level.ToString().ToLower()">
+                                        <div class="entry-time">
+                                            @entry.Timestamp?.ToString("HH:mm:ss.fff")
+                                        </div>
+                                        <div class="entry-level">
+                                            <span class="level-badge @entry.Level.ToString().ToLower()">
+                                                @entry.Level
+                                            </span>
+                                        </div>
+                                        <div class="entry-message">
+                                            @GetEntryPreview(entry)
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseChainDetails">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid LogFileId { get; set; }
+
+    private VisualizationService.TimelineData? timelineData;
+    private VisualizationService.RequestChain? selectedChain;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTimelineData();
+    }
+
+    private async Task LoadTimelineData()
+    {
+        timelineData = await VisualizationService.GenerateTimelineAsync(LogFileId);
+        StateHasChanged();
+    }
+
+    private double GetBarWidth(VisualizationService.RequestChain chain)
+    {
+        if (timelineData == null || (timelineData.MaxTime - timelineData.MinTime).TotalMilliseconds == 0)
+            return 0;
+
+        var totalDuration = (timelineData.MaxTime - timelineData.MinTime).TotalMilliseconds;
+        var chainDuration = (chain.EndTime - chain.StartTime).TotalMilliseconds;
+
+        return (chainDuration / totalDuration) * 100;
+    }
+
+    private double GetBarOffset(VisualizationService.RequestChain chain)
+    {
+        if (timelineData == null || (timelineData.MaxTime - timelineData.MinTime).TotalMilliseconds == 0)
+            return 0;
+
+        var totalDuration = (timelineData.MaxTime - timelineData.MinTime).TotalMilliseconds;
+        var offset = (chain.StartTime - timelineData.MinTime).TotalMilliseconds;
+
+        return (offset / totalDuration) * 100;
+    }
+
+    private string GetChainBarClass(int errorCount)
+    {
+        return errorCount > 0 ? "error" : "success";
+    }
+
+    private string GetChainResourceType(VisualizationService.RequestChain chain)
+    {
+        return chain.Entries.FirstOrDefault(e => !string.IsNullOrEmpty(e.TfResourceType))?.TfResourceType ?? "Unknown";
+    }
+
+    private void ShowChainDetails(VisualizationService.RequestChain chain)
+    {
+        selectedChain = chain;
+        StateHasChanged();
+    }
+
+    private void CloseChainDetails()
+    {
+        selectedChain = null;
+        StateHasChanged();
+    }
+
+    private string GetEntryPreview(LogEntry entry)
+    {
+        return entry.RawMessage.Length > 100
+            ? entry.RawMessage.Substring(0, 100) + "..."
+            : entry.RawMessage;
+    }
+}

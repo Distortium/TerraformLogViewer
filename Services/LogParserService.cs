@@ -1,484 +1,731 @@
-﻿namespace TerraformLogViewer.Services
+﻿using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using System.Buffers;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using TerraformLogViewer.Models;
+using LogLevel = TerraformLogViewer.Models.LogLevel;
+
+namespace TerraformLogViewer.Services
 {
-    using System.Text.RegularExpressions;
-    using TerraformLogViewer.Models;
-
-    public interface ILogParserService
+    public class LogParserService
     {
-        Task<TerraformLog> ParseLogAsync(string logContent);
-        TerraformLog ParseLog(string logContent);
-        List<TerraformResource> ExtractResources(List<LogEntry> entries);
-        List<LogError> ExtractErrors(List<LogEntry> entries);
-        List<LogWarning> ExtractWarnings(List<LogEntry> entries);
-        ExecutionSummary CalculateSummary(TerraformLog log);
-    }
-
-    public class LogParserService : ILogParserService
-    {
+        private readonly AppDbContext _context;
         private readonly ILogger<LogParserService> _logger;
 
-        // Регулярные выражения для парсинга
-        private static readonly Regex TimestampRegex = new Regex(@"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)", RegexOptions.Compiled);
-        private static readonly Regex ResourceRegex = new Regex(@"(aws|azurerm|google|kubernetes)_[\w]+\.?[\w]*", RegexOptions.Compiled);
-        private static readonly Regex ResourceActionRegex = new Regex(@"#\s*([\w\._\-]+)\s+will be\s+(created|updated|destroyed|read)", RegexOptions.Compiled);
-        private static readonly Regex ResourceResultRegex = new Regex(@"#\s*([\w\._\-]+)\s+(created|updated|destroyed|read)\s+.*?(\d+[smh]*)", RegexOptions.Compiled);
-        private static readonly Regex ErrorRegex = new Regex(@"(Error:|ERROR|Failed|failed)\s*:\s*(.+)", RegexOptions.Compiled);
-        private static readonly Regex WarningRegex = new Regex(@"(Warning:|WARN)\s*(.+)", RegexOptions.Compiled);
-        private static readonly Regex PlanSummaryRegex = new Regex(@"Plan:\s*(\d+)\s+to\s+add,\s*(\d+)\s+to\s+change,\s*(\d+)\s+to\s+destroy", RegexOptions.Compiled);
-        private static readonly Regex ApplySummaryRegex = new Regex(@"Apply\s+complete!\s+Resources:\s*(\d+)\s+added,\s*(\d+)\s+changed,\s*(\d+)\s+destroyed", RegexOptions.Compiled);
-        private static readonly Regex DurationRegex = new Regex(@"(\d+[smh]+\d*[smh]*)", RegexOptions.Compiled);
-        private static readonly Regex DependencyRegex = new Regex(@"depends_on\s*=\s*\[([^\]]+)\]", RegexOptions.Compiled);
-
-        public LogParserService(ILogger<LogParserService> logger)
+        public LogParserService(AppDbContext context, ILogger<LogParserService> logger)
         {
+            _context = context;
             _logger = logger;
         }
 
-        public async Task<TerraformLog> ParseLogAsync(string logContent)
+        public async Task<LogFile> ParseAndStoreLogsAsync(Stream logStream, string fileName, Guid userId, string fileType = "Text")
         {
-            return await Task.Run(() => ParseLog(logContent));
-        }
+            var lastUser = _context.Users
+                .OrderByDescending(u => u.Id)
+                .FirstOrDefault();
 
-        public TerraformLog ParseLog(string logContent)
-        {
-            var terraformLog = new TerraformLog
+            var logFile = new LogFile
             {
-                OriginalLog = logContent
+                Id = Guid.NewGuid(),
+                UserId = lastUser.Id,
+                FileName = fileName,
+                FileSize = logStream.Length,
+                UploadedAt = DateTime.UtcNow,
+                FileType = fileType
             };
 
-            try
-            {
-                var lines = logContent.Split('\n');
-                terraformLog.Entries = ParseLogEntries(lines).ToList();
-                terraformLog.Errors = ExtractErrors(terraformLog.Entries);
-                terraformLog.Warnings = ExtractWarnings(terraformLog.Entries);
-                terraformLog.Resources = ExtractResources(terraformLog.Entries);
-                terraformLog.Summary = CalculateSummary(terraformLog);
-                terraformLog.Phases = ExtractPhases(terraformLog.Entries);
+            await _context.LogFiles.AddAsync(logFile);
+            await _context.SaveChangesAsync();
 
-                // Связываем ресурсы с соответствующими записями логов
-                LinkResourcesWithEntries(terraformLog);
+            var (entries, stats) = await ParseLogsWithStatsAsync(logStream, logFile.Id, fileType);
 
-                _logger.LogInformation("Successfully parsed Terraform log with {ResourceCount} resources, {ErrorCount} errors",
-                    terraformLog.Resources.Count, terraformLog.Errors.Count);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to parse Terraform log");
-                throw;
-            }
+            // Обновляем статистику
+            logFile.TotalEntries = stats.TotalEntries;
+            logFile.ErrorCount = stats.ErrorCount;
+            logFile.WarningCount = stats.WarningCount;
+            logFile.ProcessedAt = DateTime.UtcNow;
 
-            return terraformLog;
+            // Сохраняем записи батчами
+            await SaveEntriesInBatchesAsync(entries, logFile.Id);
+
+            return logFile;
         }
 
-        private IEnumerable<LogEntry> ParseLogEntries(string[] lines)
+        private async Task<(IAsyncEnumerable<LogEntry> entries, ParseStats stats)> ParseLogsWithStatsAsync(
+            Stream logStream, Guid logFileId, string fileType)
         {
-            var currentPhase = "unknown";
-            var lineNumber = 0;
+            var stats = new ParseStats();
 
-            foreach (var line in lines)
+            IAsyncEnumerable<LogEntry> entries = fileType == "JSON"
+                ? ParseJsonLogsStreamingAsync(logStream, logFileId, stats)
+                : ParseTextLogsStreamingAsync(logStream, logFileId, stats);
+
+            return (entries, stats);
+        }
+
+        private async IAsyncEnumerable<LogEntry> ParseTextLogsStreamingAsync(Stream logStream, Guid logFileId, ParseStats stats)
+        {
+            using var reader = new StreamReader(logStream, Encoding.UTF8, leaveOpen: true);
+
+            string? line;
+            int lineNumber = 0;
+            TerraformPhase currentPhase = TerraformPhase.Unknown;
+            var buffer = ArrayPool<LogEntry>.Shared.Rent(1000);
+            var bufferIndex = 0;
+
+            while ((line = await reader.ReadLineAsync()) != null)
             {
                 lineNumber++;
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
-                var entry = new LogEntry
-                {
-                    RawLine = line.Trim(),
-                    LineNumber = lineNumber,
-                    Phase = currentPhase
-                };
-
-                // Определяем уровень логирования
-                entry.Level = DetermineLogLevel(line);
-
-                // Определяем фазу выполнения
-                if (line.Contains("Terraform will perform the following actions") || line.Contains("Plan:"))
-                    currentPhase = "plan";
-                else if (line.Contains("Apply complete!") || line.Contains("Applying..."))
-                    currentPhase = "apply";
-                else if (line.Contains("Initializing") || line.Contains("Initialization"))
-                    currentPhase = "init";
-
+                var entry = ParseTextLogLine(line, lineNumber, currentPhase, logFileId);
+                currentPhase = DetectPhase(line, currentPhase);
                 entry.Phase = currentPhase;
 
-                // Извлекаем timestamp если есть
-                var timestampMatch = TimestampRegex.Match(line);
-                if (timestampMatch.Success && DateTime.TryParse(timestampMatch.Value, out var timestamp))
-                {
-                    entry.Timestamp = timestamp;
-                }
-                else
-                {
-                    entry.Timestamp = DateTime.UtcNow; // fallback
-                }
+                // Обновляем статистику
+                UpdateStats(stats, entry);
 
-                // Извлекаем сообщение
-                entry.Message = ExtractMessage(line);
+                buffer[bufferIndex++] = entry;
 
-                // Извлекаем адрес ресурса если есть
-                var resourceMatch = ResourceRegex.Match(line);
-                if (resourceMatch.Success)
+                // Возвращаем батч когда буфер заполнен
+                if (bufferIndex >= buffer.Length)
                 {
-                    entry.ResourceAddress = resourceMatch.Value;
+                    for (int i = 0; i < bufferIndex; i++)
+                    {
+                        yield return buffer[i];
+                    }
+                    bufferIndex = 0;
                 }
-
-                yield return entry;
             }
+
+            // Возвращаем оставшиеся записи
+            for (int i = 0; i < bufferIndex; i++)
+            {
+                yield return buffer[i];
+            }
+
+            ArrayPool<LogEntry>.Shared.Return(buffer);
         }
 
-        public List<TerraformResource> ExtractResources(List<LogEntry> entries)
+        private async IAsyncEnumerable<LogEntry> ParseJsonLogsStreamingAsync(Stream logStream, Guid logFileId, ParseStats stats)
         {
-            var resources = new Dictionary<string, TerraformResource>();
+            using var reader = new StreamReader(logStream, Encoding.UTF8, leaveOpen: true);
 
-            foreach (var entry in entries)
+            string? line;
+            int lineNumber = 0;
+            var buffer = ArrayPool<LogEntry>.Shared.Rent(1000);
+            var bufferIndex = 0;
+
+            while ((line = await reader.ReadLineAsync()) != null)
             {
-                // Поиск объявлений ресурсов в плане
-                var actionMatch = ResourceActionRegex.Match(entry.RawLine);
-                if (actionMatch.Success)
-                {
-                    var address = actionMatch.Groups[1].Value;
-                    var action = actionMatch.Groups[2].Value;
+                lineNumber++;
+                if (string.IsNullOrWhiteSpace(line)) continue;
 
-                    if (!resources.ContainsKey(address))
+                LogEntry? entry = null;
+                try
+                {
+                    entry = ParseJsonLogLine(line, logFileId, lineNumber);
+                }
+                catch (JsonException ex)
+                {
+                    _logger.LogDebug(ex, "Failed to parse JSON line {LineNumber}, treating as text", lineNumber);
+                    entry = ParseTextLogLine(line, lineNumber, TerraformPhase.Unknown, logFileId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Unexpected error parsing line {LineNumber}", lineNumber);
+                    entry = CreateErrorEntry(line, logFileId, lineNumber, "Parse error");
+                }
+
+                if (entry != null)
+                {
+                    // Обновляем статистику
+                    UpdateStats(stats, entry);
+
+                    buffer[bufferIndex++] = entry;
+
+                    // Возвращаем батч когда буфер заполнен
+                    if (bufferIndex >= buffer.Length)
                     {
-                        resources[address] = new TerraformResource
+                        for (int i = 0; i < bufferIndex; i++)
                         {
-                            Address = address,
-                            Type = ExtractResourceType(address),
-                            Provider = ExtractProvider(address),
-                            Action = ParseResourceAction(action),
-                            Status = ResourceStatus.Pending,
-                            StartLine = entry.LineNumber
-                        };
+                            yield return buffer[i];
+                        }
+                        bufferIndex = 0;
                     }
-                }
-
-                // Поиск результатов выполнения ресурсов
-                var resultMatch = ResourceResultRegex.Match(entry.RawLine);
-                if (resultMatch.Success)
-                {
-                    var address = resultMatch.Groups[1].Value;
-                    var result = resultMatch.Groups[2].Value;
-                    var duration = ParseDuration(resultMatch.Groups[3].Value);
-
-                    if (resources.ContainsKey(address))
-                    {
-                        resources[address].Status = result.ToLower() == "failed" ?
-                            ResourceStatus.Failed : ResourceStatus.Success;
-                        resources[address].Duration = duration;
-                        resources[address].EndLine = entry.LineNumber;
-                    }
-                    else
-                    {
-                        // Создаем ресурс если его еще нет
-                        resources[address] = new TerraformResource
-                        {
-                            Address = address,
-                            Type = ExtractResourceType(address),
-                            Provider = ExtractProvider(address),
-                            Action = ParseResourceAction(result),
-                            Status = result.ToLower() == "failed" ?
-                                ResourceStatus.Failed : ResourceStatus.Success,
-                            Duration = duration,
-                            StartLine = entry.LineNumber,
-                            EndLine = entry.LineNumber
-                        };
-                    }
-                }
-
-                // Обработка ошибок для ресурсов
-                if (entry.Level == LogLevel.Error && !string.IsNullOrEmpty(entry.ResourceAddress))
-                {
-                    var address = entry.ResourceAddress;
-                    if (!resources.ContainsKey(address))
-                    {
-                        resources[address] = new TerraformResource
-                        {
-                            Address = address,
-                            Type = ExtractResourceType(address),
-                            Provider = ExtractProvider(address),
-                            Action = ResourceAction.Create, // предположение по умолчанию
-                            Status = ResourceStatus.Failed,
-                            StartLine = entry.LineNumber
-                        };
-                    }
-                    resources[address].Status = ResourceStatus.Failed;
                 }
             }
 
-            // Извлекаем зависимости
-            ExtractDependencies(resources, entries);
+            // Возвращаем оставшиеся записи
+            for (int i = 0; i < bufferIndex; i++)
+            {
+                yield return buffer[i];
+            }
 
-            return resources.Values.ToList();
+            ArrayPool<LogEntry>.Shared.Return(buffer);
         }
 
-        public List<LogError> ExtractErrors(List<LogEntry> entries)
+        private async Task SaveEntriesInBatchesAsync(IAsyncEnumerable<LogEntry> entries, Guid logFileId)
         {
-            var errors = new List<LogError>();
+            const int batchSize = 1000;
+            var batch = new List<LogEntry>(batchSize);
+            var totalSaved = 0;
 
-            foreach (var entry in entries.Where(e => e.Level == LogLevel.Error))
+            await foreach (var entry in entries)
             {
-                var errorMatch = ErrorRegex.Match(entry.RawLine);
-                if (errorMatch.Success || entry.Level == LogLevel.Error)
+                // Валидация записи
+                if (!IsValidEntry(entry, logFileId))
                 {
-                    var error = new LogError
-                    {
-                        Message = errorMatch.Success ? errorMatch.Groups[2].Value : entry.Message,
-                        ResourceAddress = entry.ResourceAddress,
-                        Phase = entry.Phase,
-                        LineNumber = entry.LineNumber,
-                        Suggestion = GenerateSuggestion(entry.RawLine)
-                    };
+                    _logger.LogWarning("Skipping invalid entry: {EntryId}", entry.Id);
+                    continue;
+                }
 
-                    // Извлекаем код ошибки если есть
-                    var codeMatch = Regex.Match(entry.RawLine, @"\(([A-Za-z_]+)\)");
-                    if (codeMatch.Success)
-                    {
-                        error.ErrorCode = codeMatch.Groups[1].Value;
-                    }
+                batch.Add(entry);
 
-                    errors.Add(error);
+                if (batch.Count >= batchSize)
+                {
+                    await SaveBatchAsync(batch);
+                    totalSaved += batch.Count;
+                    _logger.LogInformation("Saved batch of {BatchSize} entries, total: {TotalSaved}", batch.Count, totalSaved);
+                    batch.Clear();
                 }
             }
 
-            return errors;
-        }
-
-        public List<LogWarning> ExtractWarnings(List<LogEntry> entries)
-        {
-            var warnings = new List<LogWarning>();
-
-            foreach (var entry in entries.Where(e => e.Level == LogLevel.Warn))
+            // Сохраняем последний неполный батч
+            if (batch.Count > 0)
             {
-                var warningMatch = WarningRegex.Match(entry.RawLine);
-                if (warningMatch.Success || entry.Level == LogLevel.Warn)
-                {
-                    warnings.Add(new LogWarning
-                    {
-                        Message = warningMatch.Success ? warningMatch.Groups[2].Value : entry.Message,
-                        ResourceAddress = entry.ResourceAddress,
-                        LineNumber = entry.LineNumber
-                    });
-                }
+                await SaveBatchAsync(batch);
+                totalSaved += batch.Count;
+                _logger.LogInformation("Saved final batch of {BatchSize} entries, total: {TotalSaved}", batch.Count, totalSaved);
             }
-
-            return warnings;
         }
 
-        public ExecutionSummary CalculateSummary(TerraformLog log)
-        {
-            var summary = new ExecutionSummary
-            {
-                HasErrors = log.Errors.Any(),
-                HasWarnings = log.Warnings.Any()
-            };
-
-            // Анализ суммарной статистики из лога
-            foreach (var entry in log.Entries)
-            {
-                // Поиск summary plan
-                var planMatch = PlanSummaryRegex.Match(entry.RawLine);
-                if (planMatch.Success)
-                {
-                    summary.ResourcesToAdd = int.Parse(planMatch.Groups[1].Value);
-                    summary.ResourcesToChange = int.Parse(planMatch.Groups[2].Value);
-                    summary.ResourcesToDestroy = int.Parse(planMatch.Groups[3].Value);
-                }
-
-                // Поиск summary apply
-                var applyMatch = ApplySummaryRegex.Match(entry.RawLine);
-                if (applyMatch.Success)
-                {
-                    summary.ResourcesToAdd = int.Parse(applyMatch.Groups[1].Value);
-                    summary.ResourcesToChange = int.Parse(applyMatch.Groups[2].Value);
-                    summary.ResourcesToDestroy = int.Parse(applyMatch.Groups[3].Value);
-                }
-            }
-
-            // Расчет длительности
-            if (log.Phases.Any())
-            {
-                var start = log.Phases.Min(p => p.StartTime);
-                var end = log.Phases.Max(p => p.EndTime);
-                summary.TotalDuration = end - start;
-            }
-
-            return summary;
-        }
-
-        #region Вспомогательные методы
-
-        private LogLevel DetermineLogLevel(string line)
-        {
-            if (line.Contains("ERROR") || line.Contains("Error:") || line.Contains("failed"))
-                return LogLevel.Error;
-            if (line.Contains("WARN") || line.Contains("Warning:"))
-                return LogLevel.Warn;
-            if (line.Contains("DEBUG") || line.Contains("TRACE"))
-                return LogLevel.Debug;
-            if (line.Contains("INFO"))
-                return LogLevel.Info;
-
-            return LogLevel.Info; // по умолчанию
-        }
-
-        private string ExtractMessage(string line)
-        {
-            // Убираем timestamp если есть
-            var cleanedLine = TimestampRegex.Replace(line, "").Trim();
-
-            // Убираем префиксы уровней логирования
-            cleanedLine = Regex.Replace(cleanedLine, @"^(ERROR|WARN|INFO|DEBUG|TRACE)\s*:", "").Trim();
-
-            return cleanedLine;
-        }
-
-        private string ExtractResourceType(string address)
-        {
-            var parts = address.Split('.');
-            return parts.Length > 0 ? parts[0] : address;
-        }
-
-        private string ExtractProvider(string address)
-        {
-            if (address.StartsWith("aws_")) return "aws";
-            if (address.StartsWith("azurerm_")) return "azurerm";
-            if (address.StartsWith("google_")) return "google";
-            if (address.StartsWith("kubernetes_")) return "kubernetes";
-            return "unknown";
-        }
-
-        private ResourceAction ParseResourceAction(string action)
-        {
-            return action.ToLower() switch
-            {
-                "created" or "create" => ResourceAction.Create,
-                "updated" or "update" => ResourceAction.Update,
-                "destroyed" or "destroy" => ResourceAction.Delete,
-                "read" => ResourceAction.Read,
-                "refreshed" => ResourceAction.Refresh,
-                _ => ResourceAction.NoOp
-            };
-        }
-
-        private TimeSpan ParseDuration(string durationStr)
+        private async Task SaveBatchAsync(List<LogEntry> batch)
         {
             try
             {
-                if (durationStr.EndsWith("s"))
-                    return TimeSpan.FromSeconds(int.Parse(durationStr.TrimEnd('s')));
-                if (durationStr.EndsWith("m"))
-                    return TimeSpan.FromMinutes(int.Parse(durationStr.TrimEnd('m')));
-                if (durationStr.EndsWith("h"))
-                    return TimeSpan.FromHours(int.Parse(durationStr.TrimEnd('h')));
+                await using var transaction = await _context.Database.BeginTransactionAsync();
 
-                return TimeSpan.Zero;
+                var sql = new StringBuilder();
+                var parameters = new List<NpgsqlParameter>();
+                var paramIndex = 0;
+
+                sql.AppendLine("INSERT INTO \"LogEntries\" (\"Id\", \"LogFileId\", \"Timestamp\", \"ParsedTimestamp\", \"Level\", \"RawMessage\", \"TfReqId\", \"TfResourceType\", \"TfResourceName\", \"Phase\", \"HttpReqBody\", \"HttpResBody\", \"HttpMethod\", \"HttpUrl\", \"HttpStatusCode\", \"Status\", \"SourceFile\", \"LineNumber\") VALUES ");
+
+                for (int i = 0; i < batch.Count; i++)
+                {
+                    var entry = batch[i];
+                    if (i > 0) sql.AppendLine(",");
+
+                    sql.Append($"(@p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++})");
+
+                    // Валидируем JSON
+                    var httpReqBody = ValidateAndFormatJsonForDb(entry.HttpReqBody);
+                    var httpResBody = ValidateAndFormatJsonForDb(entry.HttpResBody);
+
+                    // Создаем параметры с явным указанием типа для JSON полей
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.Id));
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.LogFileId));
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.Timestamp ?? (object)DBNull.Value));
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.ParsedTimestamp));
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", (int)entry.Level));
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.RawMessage ?? ""));
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.TfReqId ?? (object)DBNull.Value));
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.TfResourceType ?? (object)DBNull.Value));
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.TfResourceName ?? (object)DBNull.Value));
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", (int)entry.Phase));
+
+                    // JSON параметры с явным указанием типа
+                    var reqBodyParam = new NpgsqlParameter($"p{parameters.Count}", httpReqBody ?? (object)DBNull.Value);
+                    reqBodyParam.NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Jsonb;
+                    parameters.Add(reqBodyParam);
+
+                    var resBodyParam = new NpgsqlParameter($"p{parameters.Count}", httpResBody ?? (object)DBNull.Value);
+                    resBodyParam.NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Jsonb;
+                    parameters.Add(resBodyParam);
+
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.HttpMethod ?? (object)DBNull.Value));
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.HttpUrl ?? (object)DBNull.Value));
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.HttpStatusCode ?? (object)DBNull.Value));
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", (int)entry.Status));
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.SourceFile ?? ""));
+                    parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.LineNumber));
+                }
+
+                // Преобразуем параметры в массив object для ExecuteSqlRawAsync
+                var paramArray = parameters.Cast<object>().ToArray();
+                await _context.Database.ExecuteSqlRawAsync(sql.ToString(), paramArray);
+                await transaction.CommitAsync();
             }
-            catch
+            catch (Exception ex)
             {
-                return TimeSpan.Zero;
+                _logger.LogError(ex, "Failed to save batch of {BatchSize} entries", batch.Count);
+                throw;
             }
         }
 
-        private void ExtractDependencies(Dictionary<string, TerraformResource> resources, List<LogEntry> entries)
+
+        private bool IsValidEntry(LogEntry entry, Guid logFileId)
         {
-            // Простой анализ зависимостей на основе порядка выполнения
-            var resourceOrder = resources.Values
-                .Where(r => r.StartLine > 0)
-                .OrderBy(r => r.StartLine)
-                .ToList();
+            if (entry.Id == Guid.Empty) return false;
+            if (string.IsNullOrWhiteSpace(entry.RawMessage)) return false;
+            if (entry.LogFileId != logFileId) return false;
+            if (entry.LineNumber <= 0) return false;
 
-            for (int i = 1; i < resourceOrder.Count; i++)
-            {
-                var current = resourceOrder[i];
-                var previous = resourceOrder[i - 1];
-
-                // Если ресурсы выполнялись близко по времени, предполагаем зависимость
-                if (current.StartLine - previous.EndLine < 10)
-                {
-                    current.Dependencies.Add(previous.Address);
-                }
-            }
+            return true;
         }
 
-        private List<ExecutionPhase> ExtractPhases(List<LogEntry> entries)
+        private void UpdateStats(ParseStats stats, LogEntry entry)
         {
-            var phases = new List<ExecutionPhase>();
-            var currentPhase = new ExecutionPhase();
+            stats.TotalEntries++;
 
-            foreach (var entry in entries)
+            if (entry.Level == LogLevel.Error)
+                stats.ErrorCount++;
+            else if (entry.Level == LogLevel.Warn)
+                stats.WarningCount++;
+        }
+
+        private LogEntry ParseTextLogLine(string line, int lineNumber, TerraformPhase currentPhase, Guid logFileId)
+        {
+            var entry = new LogEntry
             {
-                if (entry.Message.Contains("Initializing") && currentPhase.Name != "init")
-                {
-                    if (!string.IsNullOrEmpty(currentPhase.Name))
-                        phases.Add(currentPhase);
+                Id = Guid.NewGuid(),
+                LogFileId = logFileId,
+                RawMessage = line,
+                LineNumber = lineNumber,
+                SourceFile = "imported.log",
+                Phase = currentPhase,
+                ParsedTimestamp = DateTime.UtcNow,
+                Status = EntryStatus.Unread
+            };
 
-                    currentPhase = new ExecutionPhase { Name = "init", StartTime = entry.Timestamp };
-                }
-                else if (entry.Message.Contains("Terraform will perform") && currentPhase.Name != "plan")
+            ParseTimestamp(line, entry);
+            ParseLogLevel(line, entry);
+            ParseTerraformFields(line, entry);
+            ParseHttpData(line, entry);
+
+            return entry;
+        }
+
+        private LogEntry CreateErrorEntry(string line, Guid logFileId, int lineNumber, string errorMessage)
+        {
+            return new LogEntry
+            {
+                Id = Guid.NewGuid(),
+                LogFileId = logFileId,
+                RawMessage = $"{errorMessage}: {line}",
+                LineNumber = lineNumber,
+                Level = LogLevel.Error,
+                Phase = TerraformPhase.Unknown,
+                ParsedTimestamp = DateTime.UtcNow,
+                SourceFile = "error",
+                Status = EntryStatus.Unread
+            };
+        }
+
+        private LogEntry? ParseJsonLogLine(string jsonLine, Guid logFileId, int lineNumber)
+        {
+            using var document = JsonDocument.Parse(jsonLine);
+            var root = document.RootElement;
+
+            var entry = new LogEntry
+            {
+                Id = Guid.NewGuid(),
+                LogFileId = logFileId,
+                LineNumber = lineNumber,
+                ParsedTimestamp = DateTime.UtcNow,
+                SourceFile = "terraform.json",
+                Status = EntryStatus.Unread
+            };
+
+            // Парсим основные поля JSON для Terraform формата
+            ParseJsonField(root, "@timestamp", value => {
+                if (value.ValueKind == JsonValueKind.String)
                 {
-                    if (!string.IsNullOrEmpty(currentPhase.Name))
+                    var timestampStr = value.GetString();
+                    if (DateTime.TryParse(timestampStr, out var timestamp))
                     {
-                        currentPhase.EndTime = entry.Timestamp;
-                        phases.Add(currentPhase);
+                        entry.Timestamp = NormalizeDateTime(timestamp);
                     }
-                    currentPhase = new ExecutionPhase { Name = "plan", StartTime = entry.Timestamp };
                 }
-                else if (entry.Message.Contains("Applying") && currentPhase.Name != "apply")
+            });
+
+            ParseJsonField(root, "@level", value => {
+                if (value.ValueKind == JsonValueKind.String)
                 {
-                    if (!string.IsNullOrEmpty(currentPhase.Name))
+                    entry.Level = ParseLogLevelFromString(value.GetString());
+                }
+            });
+
+            ParseJsonField(root, "@message", value => {
+                if (value.ValueKind == JsonValueKind.String)
+                    entry.RawMessage = value.GetString() ?? string.Empty;
+            });
+
+            // Альтернативные имена полей
+            if (entry.Level == LogLevel.Unknown)
+            {
+                ParseJsonField(root, "level", value => {
+                    if (value.ValueKind == JsonValueKind.String)
                     {
-                        currentPhase.EndTime = entry.Timestamp;
-                        phases.Add(currentPhase);
+                        entry.Level = ParseLogLevelFromString(value.GetString());
                     }
-                    currentPhase = new ExecutionPhase { Name = "apply", StartTime = entry.Timestamp };
+                });
+            }
+
+            if (string.IsNullOrEmpty(entry.RawMessage))
+            {
+                ParseJsonField(root, "message", value => {
+                    if (value.ValueKind == JsonValueKind.String)
+                        entry.RawMessage = value.GetString() ?? string.Empty;
+                });
+            }
+
+            // Если сообщение не установлено, используем весь JSON
+            if (string.IsNullOrEmpty(entry.RawMessage))
+                entry.RawMessage = jsonLine;
+
+            // Парсим Terraform-specific поля
+            ParseJsonField(root, "tf_req_id", value => {
+                if (value.ValueKind == JsonValueKind.String)
+                    entry.TfReqId = value.GetString();
+            });
+
+            ParseJsonField(root, "tf_resource_type", value => {
+                if (value.ValueKind == JsonValueKind.String)
+                    entry.TfResourceType = value.GetString();
+            });
+
+            ParseJsonField(root, "tf_resource_name", value => {
+                if (value.ValueKind == JsonValueKind.String)
+                    entry.TfResourceName = value.GetString();
+            });
+
+            // Парсим HTTP данные
+            ParseJsonField(root, "tf_http_req_body", value => {
+                if (value.ValueKind == JsonValueKind.String)
+                    entry.HttpReqBody = ValidateAndFormatJson(value.GetString() ?? "");
+                else if (value.ValueKind == JsonValueKind.Object)
+                    entry.HttpReqBody = ValidateAndFormatJson(value.ToString());
+            });
+
+            ParseJsonField(root, "tf_http_res_body", value => {
+                if (value.ValueKind == JsonValueKind.String)
+                    entry.HttpResBody = ValidateAndFormatJson(value.GetString() ?? "");
+                else if (value.ValueKind == JsonValueKind.Object)
+                    entry.HttpResBody = ValidateAndFormatJson(value.ToString());
+            });
+
+            ParseJsonField(root, "tf_http_method", value => {
+                if (value.ValueKind == JsonValueKind.String)
+                    entry.HttpMethod = value.GetString();
+            });
+
+            ParseJsonField(root, "tf_http_url", value => {
+                if (value.ValueKind == JsonValueKind.String)
+                    entry.HttpUrl = value.GetString();
+            });
+
+            ParseJsonField(root, "tf_http_status_code", value => {
+                if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var statusCode))
+                    entry.HttpStatusCode = statusCode;
+                else if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out var statusCodeStr))
+                    entry.HttpStatusCode = statusCodeStr;
+            });
+
+            // Определяем фазу
+            ParseJsonField(root, "type", value => {
+                if (value.ValueKind == JsonValueKind.String)
+                {
+                    entry.Phase = ParsePhaseFromType(value.GetString());
+                }
+            });
+
+            // Если фаза не определена по типу, определяем по сообщению
+            if (entry.Phase == TerraformPhase.Unknown)
+            {
+                entry.Phase = DetectPhase(entry.RawMessage, TerraformPhase.Unknown);
+            }
+
+            // Парсим дополнительные Terraform поля
+            ParseJsonField(root, "@module", value => {
+                if (value.ValueKind == JsonValueKind.String)
+                {
+                    var module = value.GetString();
+                    if (!string.IsNullOrEmpty(module))
+                    {
+                        entry.RawMessage = $"[{module}] {entry.RawMessage}";
+                    }
+                }
+            });
+
+            return entry;
+        }
+
+        // Остальные вспомогательные методы остаются без изменений
+        private DateTime? NormalizeDateTime(DateTime timestamp)
+        {
+            if (timestamp.Kind == DateTimeKind.Unspecified)
+                return DateTime.SpecifyKind(timestamp, DateTimeKind.Utc);
+            else if (timestamp.Kind == DateTimeKind.Local)
+                return timestamp.ToUniversalTime();
+            else
+                return timestamp;
+        }
+
+        private LogLevel ParseLogLevelFromString(string? levelStr)
+        {
+            return levelStr?.ToUpperInvariant() switch
+            {
+                "ERROR" => LogLevel.Error,
+                "WARN" or "WARNING" => LogLevel.Warn,
+                "INFO" => LogLevel.Info,
+                "DEBUG" => LogLevel.Debug,
+                "TRACE" => LogLevel.Trace,
+                _ => LogLevel.Unknown
+            };
+        }
+
+        private TerraformPhase ParsePhaseFromType(string? typeStr)
+        {
+            return typeStr?.ToUpperInvariant() switch
+            {
+                "PLAN" or "PLANNED_CHANGE" or "CHANGE_SUMMARY" => TerraformPhase.Plan,
+                "APPLY" or "APPLY_START" or "APPLY_COMPLETE" or "APPLY_ERROR" or "APPLY_PROGRESS" => TerraformPhase.Apply,
+                "PROVISION_PROGRESS" or "PROVISIONER_COMPLETED" or "PROVISIONER_STARTED" => TerraformPhase.Apply,
+                "REFRESH_COMPLETE" or "REFRESH_START" => TerraformPhase.Refresh,
+                "INIT" => TerraformPhase.Init,
+                "DESTROY" => TerraformPhase.Destroy,
+                _ => TerraformPhase.Unknown
+            };
+        }
+
+        private void ParseTimestamp(string line, LogEntry entry)
+        {
+            var timestampPatterns = new[]
+            {
+                new Regex(@"(?<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z?)"),
+                new Regex(@"(?<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})"),
+                new Regex(@"(?<timestamp>\d{2}:\d{2}:\d{2}\.\d{3})"),
+                new Regex(@"(?<timestamp>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})")
+            };
+
+            foreach (var pattern in timestampPatterns)
+            {
+                var match = pattern.Match(line);
+                if (match.Success)
+                {
+                    var timestampString = match.Groups["timestamp"].Value;
+                    if (DateTime.TryParse(timestampString, out var timestamp))
+                    {
+                        entry.Timestamp = NormalizeDateTime(timestamp);
+                        break;
+                    }
+                }
+            }
+        }
+
+        private void ParseLogLevel(string line, LogEntry entry)
+        {
+            var levelPatterns = new Dictionary<Regex, LogLevel>
+            {
+                { new Regex(@"(?i)\[ERROR\]|\bERROR\b|\berror\b"), LogLevel.Error },
+                { new Regex(@"(?i)\[WARN\]|\bWARN\b|\bwarning\b|\bwarn\b"), LogLevel.Warn },
+                { new Regex(@"(?i)\[INFO\]|\bINFO\b|\binfo\b"), LogLevel.Info },
+                { new Regex(@"(?i)\[DEBUG\]|\bDEBUG\b|\bdebug\b"), LogLevel.Debug },
+                { new Regex(@"(?i)\[TRACE\]|\bTRACE\b|\btrace\b"), LogLevel.Trace }
+            };
+
+            foreach (var (pattern, level) in levelPatterns)
+            {
+                if (pattern.IsMatch(line))
+                {
+                    entry.Level = level;
+                    return;
                 }
             }
 
-            // Завершаем последнюю фазу
-            if (!string.IsNullOrEmpty(currentPhase.Name) && entries.Any())
-            {
-                currentPhase.EndTime = entries.Last().Timestamp;
-                currentPhase.Completed = true;
-                phases.Add(currentPhase);
-            }
-
-            return phases;
+            // Эвристическое определение уровня
+            entry.Level = DetermineLevelHeuristic(line);
         }
 
-        private void LinkResourcesWithEntries(TerraformLog log)
+        private LogLevel DetermineLevelHeuristic(string line)
         {
-            foreach (var resource in log.Resources)
-            {
-                resource.RelatedEntries = log.Entries
-                    .Where(e => e.ResourceAddress == resource.Address ||
-                               e.LineNumber >= resource.StartLine &&
-                               e.LineNumber <= resource.EndLine)
-                    .ToList();
+            if (line.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("failed", StringComparison.OrdinalIgnoreCase))
+                return LogLevel.Error;
 
-                resource.Errors = log.Errors
-                    .Where(e => e.ResourceAddress == resource.Address)
-                    .ToList();
+            if (line.Contains("warn", StringComparison.OrdinalIgnoreCase))
+                return LogLevel.Warn;
+
+            if (line.Contains("debug", StringComparison.OrdinalIgnoreCase))
+                return LogLevel.Debug;
+
+            return LogLevel.Info;
+        }
+
+        private void ParseTerraformFields(string line, LogEntry entry)
+        {
+            var tfReqIdRegex = new Regex(@"tf_req_id[\s=:]+([\w-]+)");
+            var tfResourceTypeRegex = new Regex(@"tf_resource_type[\s=:]+([\w\._]+)");
+            var tfResourceNameRegex = new Regex(@"tf_resource_name[\s=:]+([\w\._-]+)");
+
+            var reqIdMatch = tfReqIdRegex.Match(line);
+            if (reqIdMatch.Success) entry.TfReqId = reqIdMatch.Groups[1].Value;
+
+            var resourceTypeMatch = tfResourceTypeRegex.Match(line);
+            if (resourceTypeMatch.Success) entry.TfResourceType = resourceTypeMatch.Groups[1].Value;
+
+            var resourceNameMatch = tfResourceNameRegex.Match(line);
+            if (resourceNameMatch.Success) entry.TfResourceName = resourceNameMatch.Groups[1].Value;
+        }
+
+        private void ParseHttpData(string line, LogEntry entry)
+        {
+            var httpReqBodyRegex = new Regex(@"tf_http_req_body[\s=:]+(?<json>\{.*\})", RegexOptions.Singleline);
+            var httpResBodyRegex = new Regex(@"tf_http_res_body[\s=:]+(?<json>\{.*\})", RegexOptions.Singleline);
+            var httpMethodRegex = new Regex(@"tf_http_method[\s=:]+(\w+)");
+            var httpUrlRegex = new Regex(@"tf_http_url[\s=:]+(\S+)");
+            var httpStatusCodeRegex = new Regex(@"tf_http_status_code[\s=:]+(\d+)");
+
+            var reqBodyMatch = httpReqBodyRegex.Match(line);
+            if (reqBodyMatch.Success && IsValidJson(reqBodyMatch.Groups["json"].Value))
+                entry.HttpReqBody = FormatJson(reqBodyMatch.Groups["json"].Value);
+
+            var resBodyMatch = httpResBodyRegex.Match(line);
+            if (resBodyMatch.Success && IsValidJson(resBodyMatch.Groups["json"].Value))
+                entry.HttpResBody = FormatJson(resBodyMatch.Groups["json"].Value);
+
+            var methodMatch = httpMethodRegex.Match(line);
+            if (methodMatch.Success) entry.HttpMethod = methodMatch.Groups[1].Value;
+
+            var urlMatch = httpUrlRegex.Match(line);
+            if (urlMatch.Success) entry.HttpUrl = urlMatch.Groups[1].Value;
+
+            var statusMatch = httpStatusCodeRegex.Match(line);
+            if (statusMatch.Success && int.TryParse(statusMatch.Groups[1].Value, out var statusCode))
+                entry.HttpStatusCode = statusCode;
+        }
+
+        private TerraformPhase DetectPhase(string line, TerraformPhase currentPhase)
+        {
+            if (line.Contains("terraform plan", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("Running plan", StringComparison.OrdinalIgnoreCase))
+                return TerraformPhase.Plan;
+
+            if (line.Contains("terraform apply", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("Applying...", StringComparison.OrdinalIgnoreCase))
+                return TerraformPhase.Apply;
+
+            if (line.Contains("terraform destroy", StringComparison.OrdinalIgnoreCase))
+                return TerraformPhase.Destroy;
+
+            if (line.Contains("terraform init", StringComparison.OrdinalIgnoreCase))
+                return TerraformPhase.Init;
+
+            return currentPhase;
+        }
+
+        private void ParseJsonField(JsonElement root, string fieldName, Action<JsonElement> action)
+        {
+            if (root.TryGetProperty(fieldName, out var element))
+            {
+                try
+                {
+                    action(element);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Error parsing JSON field {FieldName}", fieldName);
+                }
             }
         }
 
-        private string GenerateSuggestion(string errorMessage)
+        private bool IsValidJson(string jsonString)
         {
-            if (errorMessage.Contains("limit exceeded", StringComparison.OrdinalIgnoreCase))
-                return "Check your resource limits in the cloud provider console. Consider requesting limit increase.";
+            if (string.IsNullOrWhiteSpace(jsonString)) return false;
 
-            if (errorMessage.Contains("already exists", StringComparison.OrdinalIgnoreCase))
-                return "Resource might already exist. Check if you need to import it or use a different name.";
-
-            if (errorMessage.Contains("permission", StringComparison.OrdinalIgnoreCase))
-                return "Verify IAM permissions and ensure your credentials have sufficient privileges.";
-
-            if (errorMessage.Contains("timeout", StringComparison.OrdinalIgnoreCase))
-                return "Operation timed out. Consider increasing timeout values or checking network connectivity.";
-
-            return "Review the error details and check Terraform documentation for this resource type.";
+            try
+            {
+                JsonDocument.Parse(jsonString);
+                return true;
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
         }
 
-        #endregion
+        private string? ValidateAndFormatJsonForDb(string? jsonString)
+        {
+            if (string.IsNullOrWhiteSpace(jsonString))
+                return null;
+
+            try
+            {
+                // Пытаемся распарсить JSON чтобы убедиться в его валидности
+                using var document = JsonDocument.Parse(jsonString);
+
+                // Возвращаем оригинальную строку, если она валидна
+                // ИЛИ переформатируем для гарантии валидности:
+                return JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions
+                {
+                    WriteIndented = false
+                });
+            }
+            catch (JsonException ex)
+            {
+                // Логируем ошибку, но возвращаем null вместо невалидного JSON
+                _logger.LogWarning("Invalid JSON found and will be skipped: {Error}", ex.Message);
+                return null;
+            }
+        }
+
+        private string? ValidateAndFormatJson(string? jsonString)
+        {
+            if (string.IsNullOrWhiteSpace(jsonString))
+                return null;
+
+            try
+            {
+                // Пытаемся распарсить и переформатировать JSON
+                using var document = JsonDocument.Parse(jsonString);
+                return JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions
+                {
+                    WriteIndented = false // Без отступов для экономии места
+                });
+            }
+            catch (JsonException)
+            {
+                // Если это не валидный JSON, логируем и возвращаем null
+                _logger.LogDebug("Invalid JSON found: {JsonString}", jsonString.Length > 100 ? jsonString.Substring(0, 100) + "..." : jsonString);
+                return null;
+            }
+        }
+
+        private string FormatJson(string jsonString)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(jsonString);
+                return JsonSerializer.Serialize(document, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+            }
+            catch (JsonException)
+            {
+                return jsonString;
+            }
+        }
+
+        private class ParseStats
+        {
+            public int TotalEntries { get; set; }
+            public int ErrorCount { get; set; }
+            public int WarningCount { get; set; }
+        }
     }
 }

@@ -1,0 +1,69 @@
+﻿version: '3.8'
+
+services:
+  postgres:
+    image: postgres:13
+    container_name: postgres_db
+    environment:
+      POSTGRES_DB: terraform_logs
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d terraform_logs"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app-network
+
+  elasticsearch:
+    image: elasticsearch:7.17.0
+    container_name: elasticsearch_db
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - cluster.routing.allocation.disk.threshold_enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 40s
+    networks:
+      - app-network
+
+  blazor-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: blazor_app
+    ports:
+      - "8080:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=postgres_db;Port=5432;Username=postgres;Password=admin;Database=terraform_logs
+      - Elasticsearch__Url=http://elasticsearch_db:9200
+      - ASPNETCORE_ENVIRONMENT=Development
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+  elasticsearch_data:
+
+networks:
+  app-network:
+    driver: bridge

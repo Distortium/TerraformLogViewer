@@ -1,0 +1,60 @@
+﻿@using System.Text.Json
+<div class="json-viewer">
+    @if (isExpanded)
+    {
+        <div class="json-toolbar">
+            <button @onclick="Collapse" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-compress"></i> Collapse
+            </button>
+            <button @onclick="CopyToClipboard" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-copy"></i> Copy
+            </button>
+        </div>
+        <pre class="json-content"><code>@FormattedJson</code></pre>
+    }
+    else
+    {
+        <button @onclick="Expand" class="btn btn-sm btn-outline-primary">
+            <i class="fas fa-expand"></i> Expand JSON
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public string JsonString { get; set; } = string.Empty;
+    [Inject] public IJSRuntime JSRuntime { get; set; } = null!;
+
+    private bool isExpanded = false;
+    private string FormattedJson => FormatJson(JsonString);
+
+    private string FormatJson(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return JsonSerializer.Serialize(document, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+        }
+        catch
+        {
+            return json; // Return as-is if not valid JSON
+        }
+    }
+
+    private void Expand()
+    {
+        isExpanded = true;
+    }
+
+    private void Collapse()
+    {
+        isExpanded = false;
+    }
+
+    private async Task CopyToClipboard()
+    {
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", FormattedJson);
+    }
+}
