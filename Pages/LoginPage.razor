@@ -1,4 +1,4 @@
-@page "/register"
+﻿@page "/login"
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Web
 @inject NavigationManager NavManager
@@ -66,7 +66,7 @@
             <div class="content-container">
                 <div class="form-stack">
                     <!-- Language label above the small Mars icon -->
-                    <p class="form-subtitle">@(_language == "EN" ? "Registration" : "Регистрация")</p>
+                    <p class="form-subtitle">@(_language == "EN" ? "Login" : "Вход")</p>
 
                     <!-- Small, static Mars icon -->
                     <div class="mars-icon-container">
@@ -99,22 +99,26 @@
                         <label class="form-label">@(_language == "EN" ? "Password" : "Пароль")</label>
                     </div>
 
-                    <!-- Confirm Password field -->
-                    <div class="form-field">
-                        <input type="password" class="form-input" @bind-value="_confirmPassword" placeholder=" " />
-                        <label class="form-label">@(_language == "EN" ? "Confirm Password" : "Подтвердите пароль")</label>
-                    </div>
+                    <!-- Links container -->
+                    <div class="links-container">
+                        <!-- Register link -->
+                        <div class="register-container">
+                            <a href="/register" class="register-link">
+                                @(_language == "EN" ? "Create account" : "Создать аккаунт")
+                            </a>
+                        </div>
 
-                    <!-- Login link -->
-                    <div class="login-link-container">
-                        <a href="/login" class="login-link">
-                            @(_language == "EN" ? "Login to account" : "Войти в аккаунт")
-                        </a>
+                        <!-- Forgot password link -->
+                        <div class="forgot-container">
+                            <a href="/forgot-password" class="forgot-link">
+                                @(_language == "EN" ? "Forgot password" : "Забыли пароль")
+                            </a>
+                        </div>
                     </div>
 
                     <!-- Submit button -->
                     <button class="submit-button slow-transition">
-                        @(_language == "EN" ? "Begin Terraforming" : "Начать Terraforming")
+                        @(_language == "EN" ? "Login" : "Войти")
                     </button>
                 </div>
             </div>
@@ -364,21 +368,43 @@
             background-color: rgba(255, 255, 255, 0.08);
         }
 
-    /* Login link */
-    .login-link-container {
+    /* Links container */
+    .links-container {
         display: flex;
-        justify-content: center;
+        justify-content: space-between;
+        align-items: center;
         margin-bottom: 10px;
     }
 
-    .login-link {
+    /* Register link */
+    .register-container {
+        display: flex;
+    }
+
+    .register-link {
         font-size: 0.875rem;
         color: rgb(156, 163, 175);
         text-decoration: none;
         transition: color 0.2s;
     }
 
-        .login-link:hover {
+        .register-link:hover {
+            color: rgb(229, 231, 235);
+        }
+
+    /* Forgot password link */
+    .forgot-container {
+        display: flex;
+    }
+
+    .forgot-link {
+        font-size: 0.875rem;
+        color: rgb(156, 163, 175);
+        text-decoration: none;
+        transition: color 0.2s;
+    }
+
+        .forgot-link:hover {
             color: rgb(229, 231, 235);
         }
 
@@ -484,6 +510,12 @@
         .submit-button {
             padding: 14px;
         }
+
+        .links-container {
+            flex-direction: column;
+            gap: 10px;
+            align-items: flex-start;
+        }
     }
 
     /* Для очень широких экранов - улучшаем отображение Марса */
@@ -500,7 +532,6 @@
 @code {
     private string _email;
     private string _password;
-    private string _confirmPassword;
     private string _language = "EN";
 
     private List<StarModel> Stars = new();
