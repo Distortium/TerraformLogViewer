@@ -80,9 +80,15 @@ namespace TerraformLogViewer.Services
                 lineNumber++;
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
+                // Определяем фазу из текстовой строки
+                var detectedPhase = DetectPhaseFromText(line);
+                if (detectedPhase != TerraformPhase.Unknown)
+                {
+                    currentPhase = detectedPhase;
+                    _logger.LogDebug("Phase changed to {Phase} at line {LineNumber}", currentPhase, lineNumber);
+                }
+
                 var entry = ParseTextLogLine(line, lineNumber, currentPhase, logFileId);
-                currentPhase = DetectPhase(line, currentPhase);
-                entry.Phase = currentPhase;
 
                 // Обновляем статистику
                 UpdateStats(stats, entry);
@@ -115,45 +121,88 @@ namespace TerraformLogViewer.Services
 
             string? line;
             int lineNumber = 0;
+
+            // Текущая фаза для всего пласта логов
+            TerraformPhase currentPhase = TerraformPhase.Unknown;
             var buffer = ArrayPool<LogEntry>.Shared.Rent(1000);
             var bufferIndex = 0;
+
+            // Список для накопления записей до определения фазы
+            var pendingEntries = new List<(string jsonLine, int lineNumber)>();
 
             while ((line = await reader.ReadLineAsync()) != null)
             {
                 lineNumber++;
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
-                LogEntry? entry = null;
-                try
+                // Определяем фазу из JSON строки
+                var detectedPhase = DetectPhaseFromJson(line);
+                if (detectedPhase != TerraformPhase.Unknown)
                 {
-                    entry = ParseJsonLogLine(line, logFileId, lineNumber);
-                }
-                catch (JsonException ex)
-                {
-                    _logger.LogDebug(ex, "Failed to parse JSON line {LineNumber}, treating as text", lineNumber);
-                    entry = ParseTextLogLine(line, lineNumber, TerraformPhase.Unknown, logFileId);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Unexpected error parsing line {LineNumber}", lineNumber);
-                    entry = CreateErrorEntry(line, logFileId, lineNumber, "Parse error");
-                }
-
-                if (entry != null)
-                {
-                    // Обновляем статистику
-                    UpdateStats(stats, entry);
-
-                    buffer[bufferIndex++] = entry;
-
-                    // Возвращаем батч когда буфер заполнен
-                    if (bufferIndex >= buffer.Length)
+                    // Если нашли новую фазу, обрабатываем все накопленные записи с предыдущей фазой
+                    if (pendingEntries.Any())
                     {
-                        for (int i = 0; i < bufferIndex; i++)
+                        foreach (var (pendingLine, pendingLineNumber) in pendingEntries)
                         {
-                            yield return buffer[i];
+                            var pendingEntry = ParseJsonLogLine(pendingLine, logFileId, pendingLineNumber, currentPhase);
+                            if (pendingEntry != null)
+                            {
+                                UpdateStats(stats, pendingEntry);
+                                buffer[bufferIndex++] = pendingEntry;
+
+                                if (bufferIndex >= buffer.Length)
+                                {
+                                    for (int i = 0; i < bufferIndex; i++)
+                                    {
+                                        yield return buffer[i];
+                                    }
+                                    bufferIndex = 0;
+                                }
+                            }
                         }
-                        bufferIndex = 0;
+                        pendingEntries.Clear();
+                    }
+
+                    currentPhase = detectedPhase;
+                    _logger.LogDebug("Phase changed to {Phase} at line {LineNumber}", currentPhase, lineNumber);
+                }
+
+                // Если фаза еще не определена, накапливаем записи
+                if (currentPhase == TerraformPhase.Unknown)
+                {
+                    pendingEntries.Add((line, lineNumber));
+                }
+                else
+                {
+                    // Фаза определена - обрабатываем запись с текущей фазой
+                    var entry = ParseJsonLogLine(line, logFileId, lineNumber, currentPhase);
+                    if (entry != null)
+                    {
+                        UpdateStats(stats, entry);
+                        buffer[bufferIndex++] = entry;
+
+                        if (bufferIndex >= buffer.Length)
+                        {
+                            for (int i = 0; i < bufferIndex; i++)
+                            {
+                                yield return buffer[i];
+                            }
+                            bufferIndex = 0;
+                        }
+                    }
+                }
+            }
+
+            // Обрабатываем оставшиеся накопленные записи (если фаза так и не определилась)
+            if (pendingEntries.Any())
+            {
+                foreach (var (pendingLine, pendingLineNumber) in pendingEntries)
+                {
+                    var pendingEntry = ParseJsonLogLine(pendingLine, logFileId, pendingLineNumber, currentPhase);
+                    if (pendingEntry != null)
+                    {
+                        UpdateStats(stats, pendingEntry);
+                        buffer[bufferIndex++] = pendingEntry;
                     }
                 }
             }
@@ -167,6 +216,207 @@ namespace TerraformLogViewer.Services
             ArrayPool<LogEntry>.Shared.Return(buffer);
         }
 
+        private TerraformPhase DetectPhaseFromJson(string jsonLine)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(jsonLine);
+                var root = document.RootElement;
+
+                // 1. Проверяем поле "@message" на наличие CLI args
+                if (root.TryGetProperty("@message", out var messageElement) &&
+                    messageElement.ValueKind == JsonValueKind.String)
+                {
+                    var message = messageElement.GetString();
+                    if (!string.IsNullOrEmpty(message))
+                    {
+                        var phaseFromMessage = DetectPhaseFromMessage(message);
+                        if (phaseFromMessage != TerraformPhase.Unknown)
+                        {
+                            return phaseFromMessage;
+                        }
+                    }
+                }
+
+                // 2. Проверяем поле "message" (альтернативное имя)
+                if (root.TryGetProperty("message", out var altMessageElement) &&
+                    altMessageElement.ValueKind == JsonValueKind.String)
+                {
+                    var message = altMessageElement.GetString();
+                    if (!string.IsNullOrEmpty(message))
+                    {
+                        var phaseFromMessage = DetectPhaseFromMessage(message);
+                        if (phaseFromMessage != TerraformPhase.Unknown)
+                        {
+                            return phaseFromMessage;
+                        }
+                    }
+                }
+
+                // 3. Проверяем поле "type" для явного указания фазы
+                if (root.TryGetProperty("type", out var typeElement) &&
+                    typeElement.ValueKind == JsonValueKind.String)
+                {
+                    var type = typeElement.GetString();
+                    var phaseFromType = ParsePhaseFromType(type);
+                    if (phaseFromType != TerraformPhase.Unknown)
+                    {
+                        return phaseFromType;
+                    }
+                }
+
+                // 4. Проверяем начало операции в бекенде
+                if (root.TryGetProperty("@message", out var backendMessageElement) &&
+                    backendMessageElement.ValueKind == JsonValueKind.String)
+                {
+                    var message = backendMessageElement.GetString();
+                    if (!string.IsNullOrEmpty(message) && message.Contains("backend/local: starting"))
+                    {
+                        if (message.Contains("Apply operation"))
+                            return TerraformPhase.Apply;
+                        else if (message.Contains("Plan operation"))
+                            return TerraformPhase.Plan;
+                        else if (message.Contains("Destroy operation"))
+                            return TerraformPhase.Destroy;
+                    }
+                }
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogDebug(ex, "Failed to parse JSON for phase detection");
+            }
+
+            return TerraformPhase.Unknown;
+        }
+
+        private TerraformPhase DetectPhaseFromMessage(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+                return TerraformPhase.Unknown;
+
+            // Ищем CLI args в сообщении
+            if (message.Contains("CLI args:") || message.Contains("CLI command args:"))
+            {
+                if (message.Contains("\"terraform\", \"apply\"") ||
+                    message.Contains("[]string{\"apply\"") ||
+                    message.Contains("[\"apply\""))
+                {
+                    _logger.LogDebug("Detected Apply phase from CLI args: {Message}",
+                        GetShortMessage(message));
+                    return TerraformPhase.Apply;
+                }
+                else if (message.Contains("\"terraform\", \"plan\"") ||
+                         message.Contains("[]string{\"plan\"") ||
+                         message.Contains("[\"plan\""))
+                {
+                    _logger.LogDebug("Detected Plan phase from CLI args: {Message}",
+                        GetShortMessage(message));
+                    return TerraformPhase.Plan;
+                }
+                else if (message.Contains("\"terraform\", \"init\"") ||
+                         message.Contains("[]string{\"init\"") ||
+                         message.Contains("[\"init\""))
+                {
+                    _logger.LogDebug("Detected Init phase from CLI args: {Message}",
+                        GetShortMessage(message));
+                    return TerraformPhase.Init;
+                }
+                else if (message.Contains("\"terraform\", \"destroy\"") ||
+                         message.Contains("[]string{\"destroy\"") ||
+                         message.Contains("[\"destroy\""))
+                {
+                    _logger.LogDebug("Detected Destroy phase from CLI args: {Message}",
+                        GetShortMessage(message));
+                    return TerraformPhase.Destroy;
+                }
+            }
+
+            // Ищем другие признаки фазы в сообщении
+            if (message.Contains("backend/local: starting Apply operation") ||
+                message.Contains("Applying...") ||
+                message.Contains("Apply complete!") ||
+                message.Contains("apply_start") ||
+                message.Contains("apply_complete"))
+            {
+                return TerraformPhase.Apply;
+            }
+            else if (message.Contains("Running plan") ||
+                     message.Contains("Plan:") ||
+                     message.Contains("planned_change") ||
+                     message.Contains("change_summary"))
+            {
+                return TerraformPhase.Plan;
+            }
+            else if (message.Contains("Initializing the backend") ||
+                     message.Contains("Terraform has been successfully initialized") ||
+                     message.Contains("Initializing provider plugins"))
+            {
+                return TerraformPhase.Init;
+            }
+            else if (message.Contains("Destroying...") ||
+                     message.Contains("Destruction complete") ||
+                     message.Contains("destroy_start"))
+            {
+                return TerraformPhase.Destroy;
+            }
+            else if (message.Contains("Refreshing state") ||
+                     message.Contains("Refresh complete") ||
+                     message.Contains("refresh_start"))
+            {
+                return TerraformPhase.Refresh;
+            }
+
+            return TerraformPhase.Unknown;
+        }
+
+        private TerraformPhase DetectPhaseFromText(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+                return TerraformPhase.Unknown;
+
+            var trimmedLine = line.Trim();
+
+            // Ищем прямые команды terraform в текстовых логах
+            if (trimmedLine.Contains("terraform apply", StringComparison.OrdinalIgnoreCase) ||
+                trimmedLine.Contains("Running apply", StringComparison.OrdinalIgnoreCase) ||
+                trimmedLine.Contains("Applying...", StringComparison.OrdinalIgnoreCase) ||
+                trimmedLine.Contains("Apply complete!", StringComparison.OrdinalIgnoreCase))
+            {
+                return TerraformPhase.Apply;
+            }
+            else if (trimmedLine.Contains("terraform plan", StringComparison.OrdinalIgnoreCase) ||
+                     trimmedLine.Contains("Running plan", StringComparison.OrdinalIgnoreCase) ||
+                     trimmedLine.Contains("Plan:", StringComparison.OrdinalIgnoreCase))
+            {
+                return TerraformPhase.Plan;
+            }
+            else if (trimmedLine.Contains("terraform init", StringComparison.OrdinalIgnoreCase) ||
+                     trimmedLine.Contains("Initializing", StringComparison.OrdinalIgnoreCase) ||
+                     trimmedLine.Contains("Terraform has been successfully initialized", StringComparison.OrdinalIgnoreCase))
+            {
+                return TerraformPhase.Init;
+            }
+            else if (trimmedLine.Contains("terraform destroy", StringComparison.OrdinalIgnoreCase) ||
+                     trimmedLine.Contains("Destroying...", StringComparison.OrdinalIgnoreCase) ||
+                     trimmedLine.Contains("Destruction complete", StringComparison.OrdinalIgnoreCase))
+            {
+                return TerraformPhase.Destroy;
+            }
+            else if (trimmedLine.Contains("Refreshing state", StringComparison.OrdinalIgnoreCase) ||
+                     trimmedLine.Contains("Refresh complete", StringComparison.OrdinalIgnoreCase))
+            {
+                return TerraformPhase.Refresh;
+            }
+
+            return TerraformPhase.Unknown;
+        }
+
+        private string GetShortMessage(string message)
+        {
+            return message.Length > 100 ? message.Substring(0, 100) + "..." : message;
+        }
+
+        // Остальные методы остаются без изменений (SaveEntriesInBatchesAsync, SaveBatchAsync, ParseTextLogLine, ParseJsonLogLine и т.д.)
         private async Task SaveEntriesInBatchesAsync(IAsyncEnumerable<LogEntry> entries, Guid logFileId)
         {
             const int batchSize = 1000;
@@ -175,7 +425,6 @@ namespace TerraformLogViewer.Services
 
             await foreach (var entry in entries)
             {
-                // Валидация записи
                 if (!IsValidEntry(entry, logFileId))
                 {
                     _logger.LogWarning("Skipping invalid entry: {EntryId}", entry.Id);
@@ -193,7 +442,6 @@ namespace TerraformLogViewer.Services
                 }
             }
 
-            // Сохраняем последний неполный батч
             if (batch.Count > 0)
             {
                 await SaveBatchAsync(batch);
@@ -221,11 +469,9 @@ namespace TerraformLogViewer.Services
 
                     sql.Append($"(@p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++}, @p{paramIndex++})");
 
-                    // Валидируем JSON
                     var httpReqBody = ValidateAndFormatJsonForDb(entry.HttpReqBody);
                     var httpResBody = ValidateAndFormatJsonForDb(entry.HttpResBody);
 
-                    // Создаем параметры с явным указанием типа для JSON полей
                     parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.Id));
                     parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.LogFileId));
                     parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.Timestamp ?? (object)DBNull.Value));
@@ -237,7 +483,6 @@ namespace TerraformLogViewer.Services
                     parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.TfResourceName ?? (object)DBNull.Value));
                     parameters.Add(new NpgsqlParameter($"p{parameters.Count}", (int)entry.Phase));
 
-                    // JSON параметры с явным указанием типа
                     var reqBodyParam = new NpgsqlParameter($"p{parameters.Count}", httpReqBody ?? (object)DBNull.Value);
                     reqBodyParam.NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Jsonb;
                     parameters.Add(reqBodyParam);
@@ -254,7 +499,6 @@ namespace TerraformLogViewer.Services
                     parameters.Add(new NpgsqlParameter($"p{parameters.Count}", entry.LineNumber));
                 }
 
-                // Преобразуем параметры в массив object для ExecuteSqlRawAsync
                 var paramArray = parameters.Cast<object>().ToArray();
                 await _context.Database.ExecuteSqlRawAsync(sql.ToString(), paramArray);
                 await transaction.CommitAsync();
@@ -266,21 +510,18 @@ namespace TerraformLogViewer.Services
             }
         }
 
-
         private bool IsValidEntry(LogEntry entry, Guid logFileId)
         {
             if (entry.Id == Guid.Empty) return false;
             if (string.IsNullOrWhiteSpace(entry.RawMessage)) return false;
             if (entry.LogFileId != logFileId) return false;
             if (entry.LineNumber <= 0) return false;
-
             return true;
         }
 
         private void UpdateStats(ParseStats stats, LogEntry entry)
         {
             stats.TotalEntries++;
-
             if (entry.Level == LogLevel.Error)
                 stats.ErrorCount++;
             else if (entry.Level == LogLevel.Warn)
@@ -296,7 +537,7 @@ namespace TerraformLogViewer.Services
                 RawMessage = line,
                 LineNumber = lineNumber,
                 SourceFile = "imported.log",
-                Phase = currentPhase,
+                Phase = currentPhase, // Применяем текущую фазу ко всем записям
                 ParsedTimestamp = DateTime.UtcNow,
                 Status = EntryStatus.Unread
             };
@@ -307,6 +548,111 @@ namespace TerraformLogViewer.Services
             ParseHttpData(line, entry);
 
             return entry;
+        }
+
+        private LogEntry? ParseJsonLogLine(string jsonLine, Guid logFileId, int lineNumber, TerraformPhase currentPhase)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(jsonLine);
+                var root = document.RootElement;
+
+                var entry = new LogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    LogFileId = logFileId,
+                    LineNumber = lineNumber,
+                    Phase = currentPhase, // Применяем текущую фазу ко всем записям
+                    ParsedTimestamp = DateTime.UtcNow,
+                    SourceFile = "terraform.json",
+                    Status = EntryStatus.Unread
+                };
+
+                // Парсим основные поля
+                ParseJsonField(root, "@timestamp", value => {
+                    if (value.ValueKind == JsonValueKind.String)
+                    {
+                        var timestampStr = value.GetString();
+                        if (DateTime.TryParse(timestampStr, out var timestamp))
+                        {
+                            entry.Timestamp = NormalizeDateTime(timestamp);
+                        }
+                    }
+                });
+
+                ParseJsonField(root, "@level", value => {
+                    if (value.ValueKind == JsonValueKind.String)
+                    {
+                        entry.Level = ParseLogLevelFromString(value.GetString());
+                    }
+                });
+
+                ParseJsonField(root, "@message", value => {
+                    if (value.ValueKind == JsonValueKind.String)
+                        entry.RawMessage = value.GetString() ?? string.Empty;
+                });
+
+                // Альтернативные имена полей
+                if (entry.Level == LogLevel.Unknown)
+                {
+                    ParseJsonField(root, "level", value => {
+                        if (value.ValueKind == JsonValueKind.String)
+                        {
+                            entry.Level = ParseLogLevelFromString(value.GetString());
+                        }
+                    });
+                }
+
+                if (string.IsNullOrEmpty(entry.RawMessage))
+                {
+                    ParseJsonField(root, "message", value => {
+                        if (value.ValueKind == JsonValueKind.String)
+                            entry.RawMessage = value.GetString() ?? string.Empty;
+                    });
+                }
+
+                if (string.IsNullOrEmpty(entry.RawMessage))
+                    entry.RawMessage = jsonLine;
+
+                // Парсим остальные поля...
+                ParseJsonField(root, "tf_req_id", value => {
+                    if (value.ValueKind == JsonValueKind.String)
+                        entry.TfReqId = value.GetString();
+                });
+
+                ParseJsonField(root, "tf_resource_type", value => {
+                    if (value.ValueKind == JsonValueKind.String)
+                        entry.TfResourceType = value.GetString();
+                });
+
+                ParseJsonField(root, "tf_resource_name", value => {
+                    if (value.ValueKind == JsonValueKind.String)
+                        entry.TfResourceName = value.GetString();
+                });
+
+                ParseJsonField(root, "@module", value => {
+                    if (value.ValueKind == JsonValueKind.String)
+                    {
+                        var module = value.GetString();
+                        if (!string.IsNullOrEmpty(module))
+                        {
+                            entry.RawMessage = $"[{module}] {entry.RawMessage}";
+                        }
+                    }
+                });
+
+                return entry;
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogDebug(ex, "Failed to parse JSON line {LineNumber}", lineNumber);
+                return ParseTextLogLine(jsonLine, lineNumber, currentPhase, logFileId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Unexpected error parsing line {LineNumber}", lineNumber);
+                return CreateErrorEntry(jsonLine, logFileId, lineNumber, "Parse error");
+            }
         }
 
         private LogEntry CreateErrorEntry(string line, Guid logFileId, int lineNumber, string errorMessage)
@@ -325,146 +671,7 @@ namespace TerraformLogViewer.Services
             };
         }
 
-        private LogEntry? ParseJsonLogLine(string jsonLine, Guid logFileId, int lineNumber)
-        {
-            using var document = JsonDocument.Parse(jsonLine);
-            var root = document.RootElement;
-
-            var entry = new LogEntry
-            {
-                Id = Guid.NewGuid(),
-                LogFileId = logFileId,
-                LineNumber = lineNumber,
-                ParsedTimestamp = DateTime.UtcNow,
-                SourceFile = "terraform.json",
-                Status = EntryStatus.Unread
-            };
-
-            // Парсим основные поля JSON для Terraform формата
-            ParseJsonField(root, "@timestamp", value => {
-                if (value.ValueKind == JsonValueKind.String)
-                {
-                    var timestampStr = value.GetString();
-                    if (DateTime.TryParse(timestampStr, out var timestamp))
-                    {
-                        entry.Timestamp = NormalizeDateTime(timestamp);
-                    }
-                }
-            });
-
-            ParseJsonField(root, "@level", value => {
-                if (value.ValueKind == JsonValueKind.String)
-                {
-                    entry.Level = ParseLogLevelFromString(value.GetString());
-                }
-            });
-
-            ParseJsonField(root, "@message", value => {
-                if (value.ValueKind == JsonValueKind.String)
-                    entry.RawMessage = value.GetString() ?? string.Empty;
-            });
-
-            // Альтернативные имена полей
-            if (entry.Level == LogLevel.Unknown)
-            {
-                ParseJsonField(root, "level", value => {
-                    if (value.ValueKind == JsonValueKind.String)
-                    {
-                        entry.Level = ParseLogLevelFromString(value.GetString());
-                    }
-                });
-            }
-
-            if (string.IsNullOrEmpty(entry.RawMessage))
-            {
-                ParseJsonField(root, "message", value => {
-                    if (value.ValueKind == JsonValueKind.String)
-                        entry.RawMessage = value.GetString() ?? string.Empty;
-                });
-            }
-
-            // Если сообщение не установлено, используем весь JSON
-            if (string.IsNullOrEmpty(entry.RawMessage))
-                entry.RawMessage = jsonLine;
-
-            // Парсим Terraform-specific поля
-            ParseJsonField(root, "tf_req_id", value => {
-                if (value.ValueKind == JsonValueKind.String)
-                    entry.TfReqId = value.GetString();
-            });
-
-            ParseJsonField(root, "tf_resource_type", value => {
-                if (value.ValueKind == JsonValueKind.String)
-                    entry.TfResourceType = value.GetString();
-            });
-
-            ParseJsonField(root, "tf_resource_name", value => {
-                if (value.ValueKind == JsonValueKind.String)
-                    entry.TfResourceName = value.GetString();
-            });
-
-            // Парсим HTTP данные
-            ParseJsonField(root, "tf_http_req_body", value => {
-                if (value.ValueKind == JsonValueKind.String)
-                    entry.HttpReqBody = ValidateAndFormatJson(value.GetString() ?? "");
-                else if (value.ValueKind == JsonValueKind.Object)
-                    entry.HttpReqBody = ValidateAndFormatJson(value.ToString());
-            });
-
-            ParseJsonField(root, "tf_http_res_body", value => {
-                if (value.ValueKind == JsonValueKind.String)
-                    entry.HttpResBody = ValidateAndFormatJson(value.GetString() ?? "");
-                else if (value.ValueKind == JsonValueKind.Object)
-                    entry.HttpResBody = ValidateAndFormatJson(value.ToString());
-            });
-
-            ParseJsonField(root, "tf_http_method", value => {
-                if (value.ValueKind == JsonValueKind.String)
-                    entry.HttpMethod = value.GetString();
-            });
-
-            ParseJsonField(root, "tf_http_url", value => {
-                if (value.ValueKind == JsonValueKind.String)
-                    entry.HttpUrl = value.GetString();
-            });
-
-            ParseJsonField(root, "tf_http_status_code", value => {
-                if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var statusCode))
-                    entry.HttpStatusCode = statusCode;
-                else if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out var statusCodeStr))
-                    entry.HttpStatusCode = statusCodeStr;
-            });
-
-            // Определяем фазу
-            ParseJsonField(root, "type", value => {
-                if (value.ValueKind == JsonValueKind.String)
-                {
-                    entry.Phase = ParsePhaseFromType(value.GetString());
-                }
-            });
-
-            // Если фаза не определена по типу, определяем по сообщению
-            if (entry.Phase == TerraformPhase.Unknown)
-            {
-                entry.Phase = DetectPhase(entry.RawMessage, TerraformPhase.Unknown);
-            }
-
-            // Парсим дополнительные Terraform поля
-            ParseJsonField(root, "@module", value => {
-                if (value.ValueKind == JsonValueKind.String)
-                {
-                    var module = value.GetString();
-                    if (!string.IsNullOrEmpty(module))
-                    {
-                        entry.RawMessage = $"[{module}] {entry.RawMessage}";
-                    }
-                }
-            });
-
-            return entry;
-        }
-
-        // Остальные вспомогательные методы остаются без изменений
+        // Остальные вспомогательные методы без изменений...
         private DateTime? NormalizeDateTime(DateTime timestamp)
         {
             if (timestamp.Kind == DateTimeKind.Unspecified)
@@ -490,7 +697,10 @@ namespace TerraformLogViewer.Services
 
         private TerraformPhase ParsePhaseFromType(string? typeStr)
         {
-            return typeStr?.ToUpperInvariant() switch
+            if (string.IsNullOrEmpty(typeStr))
+                return TerraformPhase.Unknown;
+
+            return typeStr.ToUpperInvariant() switch
             {
                 "PLAN" or "PLANNED_CHANGE" or "CHANGE_SUMMARY" => TerraformPhase.Plan,
                 "APPLY" or "APPLY_START" or "APPLY_COMPLETE" or "APPLY_ERROR" or "APPLY_PROGRESS" => TerraformPhase.Apply,
@@ -547,7 +757,6 @@ namespace TerraformLogViewer.Services
                 }
             }
 
-            // Эвристическое определение уровня
             entry.Level = DetermineLevelHeuristic(line);
         }
 
@@ -609,25 +818,6 @@ namespace TerraformLogViewer.Services
                 entry.HttpStatusCode = statusCode;
         }
 
-        private TerraformPhase DetectPhase(string line, TerraformPhase currentPhase)
-        {
-            if (line.Contains("terraform plan", StringComparison.OrdinalIgnoreCase) ||
-                line.Contains("Running plan", StringComparison.OrdinalIgnoreCase))
-                return TerraformPhase.Plan;
-
-            if (line.Contains("terraform apply", StringComparison.OrdinalIgnoreCase) ||
-                line.Contains("Applying...", StringComparison.OrdinalIgnoreCase))
-                return TerraformPhase.Apply;
-
-            if (line.Contains("terraform destroy", StringComparison.OrdinalIgnoreCase))
-                return TerraformPhase.Destroy;
-
-            if (line.Contains("terraform init", StringComparison.OrdinalIgnoreCase))
-                return TerraformPhase.Init;
-
-            return currentPhase;
-        }
-
         private void ParseJsonField(JsonElement root, string fieldName, Action<JsonElement> action)
         {
             if (root.TryGetProperty(fieldName, out var element))
@@ -646,7 +836,6 @@ namespace TerraformLogViewer.Services
         private bool IsValidJson(string jsonString)
         {
             if (string.IsNullOrWhiteSpace(jsonString)) return false;
-
             try
             {
                 JsonDocument.Parse(jsonString);
@@ -662,14 +851,9 @@ namespace TerraformLogViewer.Services
         {
             if (string.IsNullOrWhiteSpace(jsonString))
                 return null;
-
             try
             {
-                // Пытаемся распарсить JSON чтобы убедиться в его валидности
                 using var document = JsonDocument.Parse(jsonString);
-
-                // Возвращаем оригинальную строку, если она валидна
-                // ИЛИ переформатируем для гарантии валидности:
                 return JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions
                 {
                     WriteIndented = false
@@ -677,7 +861,6 @@ namespace TerraformLogViewer.Services
             }
             catch (JsonException ex)
             {
-                // Логируем ошибку, но возвращаем null вместо невалидного JSON
                 _logger.LogWarning("Invalid JSON found and will be skipped: {Error}", ex.Message);
                 return null;
             }
@@ -687,20 +870,17 @@ namespace TerraformLogViewer.Services
         {
             if (string.IsNullOrWhiteSpace(jsonString))
                 return null;
-
             try
             {
-                // Пытаемся распарсить и переформатировать JSON
                 using var document = JsonDocument.Parse(jsonString);
                 return JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions
                 {
-                    WriteIndented = false // Без отступов для экономии места
+                    WriteIndented = false
                 });
             }
             catch (JsonException)
             {
-                // Если это не валидный JSON, логируем и возвращаем null
-                _logger.LogDebug("Invalid JSON found: {JsonString}", jsonString.Length > 100 ? jsonString.Substring(0, 100) + "..." : jsonString);
+                _logger.LogDebug("Invalid JSON found: {JsonString}", GetShortMessage(jsonString));
                 return null;
             }
         }

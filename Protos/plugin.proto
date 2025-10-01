@@ -1,0 +1,113 @@
+﻿syntax = "proto3";
+
+option csharp_namespace = "TerraformLogViewer.Grpc";
+
+package terraform_log_analyzer;
+
+// Сервис для плагинов
+service LogAnalyzerPlugin {
+  // Фильтрация лог записей
+  rpc FilterLogs (FilterRequest) returns (FilterResponse);
+  
+  // Обработка лог записей
+  rpc ProcessLogs (ProcessRequest) returns (ProcessResponse);
+  
+  // Агрегация ошибок
+  rpc AggregateErrors (AggregateRequest) returns (AggregateResponse);
+  
+  // Проверка здоровья плагина
+  rpc HealthCheck (HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Модели данных
+message LogEntry {
+  string id = 1;
+  string log_file_id = 2;
+  string timestamp = 3;
+  LogLevel level = 4;
+  string raw_message = 5;
+  string tf_req_id = 6;
+  string tf_resource_type = 7;
+  string tf_resource_name = 8;
+  TerraformPhase phase = 9;
+  string http_method = 10;
+  string http_url = 11;
+  int32 http_status_code = 12;
+  EntryStatus status = 13;
+  string source_file = 14;
+  int32 line_number = 15;
+  string http_req_body = 16;
+  string http_res_body = 17;
+}
+
+message FilterRequest {
+  repeated LogEntry entries = 1;
+  map<string, string> parameters = 2;
+}
+
+message FilterResponse {
+  repeated LogEntry filtered_entries = 1;
+  map<string, string> metadata = 2;
+}
+
+message ProcessRequest {
+  repeated LogEntry entries = 1;
+  map<string, string> parameters = 2;
+}
+
+message ProcessResponse {
+  repeated LogEntry processed_entries = 1;
+  map<string, string> metadata = 2;
+}
+
+message AggregateRequest {
+  repeated LogEntry entries = 1;
+  string time_window = 2; // "1h", "24h"
+  map<string, string> parameters = 3;
+}
+
+message AggregateResponse {
+  repeated ErrorGroup error_groups = 1;
+  map<string, string> metadata = 2;
+}
+
+message ErrorGroup {
+  string pattern = 1;
+  int32 count = 2;
+  string first_occurrence = 3;
+  string last_occurrence = 4;
+  repeated string example_messages = 5;
+  repeated string affected_resources = 6;
+  double frequency_per_hour = 7;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;
+  string message = 2;
+}
+
+enum LogLevel {
+  DEBUG = 0;
+  INFO = 1;
+  WARN = 2;
+  ERROR = 3;
+  TRACE = 4;
+  UNKNOWN = 5;
+}
+
+enum TerraformPhase {
+  UNKNOWN_PHASE = 0;
+  PLAN = 1;
+  APPLY = 2;
+  INIT = 3;
+  DESTROY = 4;
+  REFRESH = 5;
+}
+
+enum EntryStatus {
+  UNREAD = 0;
+  READ = 1;
+  IMPORTANT = 2;
+}

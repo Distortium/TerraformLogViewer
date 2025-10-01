@@ -35,12 +35,25 @@ namespace TerraformLogViewer
             //builder.Services.AddScoped<AuthService>();
             builder.Services.AddScoped<LogParserService>();
             builder.Services.AddScoped<VisualizationService>();
+            builder.Services.AddScoped<IntegrationService>();
             builder.Services.AddScoped<IUserService, UserService>();
 
             // HTTP Client
-            builder.Services.AddHttpClient();
+            builder.Services.AddHttpClient<IntegrationService>();
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("ApiPolicy", policy =>
+                {
+                    policy.WithOrigins("https://your-frontend-app.com")
+                          .AllowAnyHeader()
+                          .AllowAnyMethod()
+                          .AllowCredentials();
+                });
+            });
 
             var app = builder.Build();
+
+            app.UseCors("ApiPolicy");
 
             // Ensure database is created with retry logic
             using (var scope = app.Services.CreateScope())
@@ -54,7 +67,7 @@ namespace TerraformLogViewer
                     var context = services.GetRequiredService<AppDbContext>();
                     await WaitForDatabaseAsync(context, logger);
 
-                    // Создаем базу данных и таблицы
+                    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
                     //await context.Database.EnsureCreatedAsync();
                     await context.Database.MigrateAsync();
                     logger.LogInformation("Database initialized successfully");
@@ -73,7 +86,7 @@ namespace TerraformLogViewer
                         }
                         catch (Exception ex)
                         {
-                            // Логируем ошибку, но не прерываем выполнение
+                            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
                             logger.LogWarning("Failed to create Elasticsearch index, but continuing: {Error}", ex.Message);
                         }
                     }
@@ -85,7 +98,7 @@ namespace TerraformLogViewer
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "An error occurred during initialization");
-                    // Не бросаем исключение - позволяем приложению запуститься
+                    // пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ - пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
                 }
             }
 
@@ -103,7 +116,7 @@ namespace TerraformLogViewer
             app.MapBlazorHub();
             app.MapFallbackToPage("/_Host");
 
-            // Запускаем приложение
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
             try
             {
                 await app.RunAsync();
@@ -136,31 +149,5 @@ namespace TerraformLogViewer
             }
             throw new Exception("Could not connect to database after multiple attempts");
         }
-
-        /*private static async Task<bool> WaitForElasticsearchAsync(ElasticSearchService elasticSearch, ILogger<Program> logger, int maxRetries = 20)
-        {
-            for (int i = 0; i < maxRetries; i++)
-            {
-                try
-                {
-                    if (await elasticSearch.CheckConnectionAsync())
-                    {
-                        logger.LogInformation("Elasticsearch connection established");
-                        return true;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    if (i < maxRetries - 1) // Не логируем последнюю попытку как warning
-                    {
-                        logger.LogWarning("Elasticsearch not ready yet. Retrying in 10 seconds... (Attempt {Attempt}/{MaxRetries})",
-                            i + 1, maxRetries);
-                    }
-                    await Task.Delay(10000);
-                }
-            }
-            logger.LogWarning("Could not connect to Elasticsearch after multiple attempts");
-            return false;
-        }*/
     }
 }

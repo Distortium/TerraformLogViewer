@@ -31,32 +31,51 @@ namespace TerraformLogViewer.Services
                 .Where(e => e.LogFileId == logFileId)
                 .AsQueryable();
 
-            if (!string.IsNullOrEmpty(criteria.TfResourceType))
-                query = query.Where(e => e.TfResourceType != null && e.TfResourceType.Contains(criteria.TfResourceType));
+            // Фильтрация по фазе
+            if (criteria.Phase.HasValue)
+            {
+                query = query.Where(e => e.Phase == criteria.Phase.Value);
+            }
 
+            // Фильтрация по уровню логов
+            if (criteria.MinLogLevel.HasValue)
+            {
+                query = query.Where(e => e.Level >= criteria.MinLogLevel.Value);
+            }
+
+            // Фильтрация по временному диапазону
             if (criteria.StartTimestamp.HasValue)
-                query = query.Where(e => e.Timestamp >= criteria.StartTimestamp);
+            {
+                query = query.Where(e => e.Timestamp >= criteria.StartTimestamp.Value);
+            }
 
             if (criteria.EndTimestamp.HasValue)
-                query = query.Where(e => e.Timestamp <= criteria.EndTimestamp);
+            {
+                query = query.Where(e => e.Timestamp <= criteria.EndTimestamp.Value);
+            }
 
-            if (criteria.MinLogLevel.HasValue)
-                query = query.Where(e => e.Level >= criteria.MinLogLevel);
+            // Фильтрация по типу ресурса
+            if (!string.IsNullOrEmpty(criteria.TfResourceType))
+            {
+                query = query.Where(e => e.TfResourceType != null &&
+                                        e.TfResourceType.Contains(criteria.TfResourceType));
+            }
 
-            if (!string.IsNullOrEmpty(criteria.TfReqId))
-                query = query.Where(e => e.TfReqId == criteria.TfReqId);
-
-            if (criteria.Phase.HasValue)
-                query = query.Where(e => e.Phase == criteria.Phase);
-
-            if (criteria.UnreadOnly)
-                query = query.Where(e => e.Status == EntryStatus.Unread);
-
+            // Полнотекстовый поиск
             if (!string.IsNullOrEmpty(criteria.FreeText))
+            {
                 query = query.Where(e => e.RawMessage.Contains(criteria.FreeText));
+            }
+
+            // Фильтрация по статусу (непрочитанные)
+            if (criteria.UnreadOnly)
+            {
+                query = query.Where(e => e.Status == EntryStatus.Unread);
+            }
 
             return await query
                 .OrderBy(e => e.Timestamp)
+                .ThenBy(e => e.LineNumber)
                 .ToListAsync();
         }
 
