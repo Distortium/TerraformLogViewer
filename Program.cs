@@ -35,6 +35,7 @@ namespace TerraformLogViewer
             //builder.Services.AddScoped<AuthService>();
             builder.Services.AddScoped<LogParserService>();
             builder.Services.AddScoped<VisualizationService>();
+            builder.Services.AddScoped<IUserService, UserService>();
 
             // HTTP Client
             builder.Services.AddHttpClient();

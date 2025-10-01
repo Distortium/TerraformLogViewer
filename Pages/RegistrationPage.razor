@@ -1,7 +1,10 @@
 @page "/register"
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Web
+@using TerraformLogViewer.Services
 @inject NavigationManager NavManager
+@inject IUserService UserService
+@inject IJSRuntime JSRuntime
 
 <div class="page-container">
     <!-- Subtle aurora effect -->
@@ -113,7 +116,7 @@
                     </div>
 
                     <!-- Submit button -->
-                    <button class="submit-button slow-transition">
+                    <button class="submit-button slow-transition" @onclick="HandleRegister">
                         @(_language == "EN" ? "Begin Terraforming" : "Начать Terraforming")
                     </button>
                 </div>
@@ -513,6 +516,66 @@
     private void ToggleLanguage()
     {
         _language = _language == "EN" ? "RU" : "EN";
+    }
+
+    private async Task HandleRegister()
+    {
+        try
+        {
+            // Валидация
+            if (string.IsNullOrWhiteSpace(_email) ||
+                string.IsNullOrWhiteSpace(_password) ||
+                string.IsNullOrWhiteSpace(_confirmPassword))
+            {
+                await JSRuntime.InvokeVoidAsync("alert",
+                    _language == "EN" ? "Please fill in all fields" : "Пожалуйста, заполните все поля");
+                return;
+            }
+
+            if (!_email.Contains("@"))
+            {
+                await JSRuntime.InvokeVoidAsync("alert",
+                    _language == "EN" ? "Please enter a valid email" : "Пожалуйста, введите корректный email");
+                return;
+            }
+
+            if (_password != _confirmPassword)
+            {
+                await JSRuntime.InvokeVoidAsync("alert",
+                    _language == "EN" ? "Passwords do not match" : "Пароли не совпадают");
+                return;
+            }
+
+            if (_password.Length < 6)
+            {
+                await JSRuntime.InvokeVoidAsync("alert",
+                    _language == "EN" ? "Password must be at least 6 characters" : "Пароль должен быть не менее 6 символов");
+                return;
+            }
+
+            // Регистрация в базе данных
+            var user = await UserService.Register(_email, _password);
+
+            await JSRuntime.InvokeVoidAsync("alert",
+                _language == "EN" ? "Registration successful!" : "Регистрация завершена!");
+
+            // Перенаправляем на страницу входа
+            NavManager.NavigateTo("/login", true);
+        }
+        catch (Exception ex)
+        {
+            if (ex.Message.Contains("already exists"))
+            {
+                await JSRuntime.InvokeVoidAsync("alert",
+                    _language == "EN" ? "User with this email already exists" : "Пользователь с таким email уже существует");
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("alert",
+                    _language == "EN" ? "An error occurred during registration" : "Произошла ошибка при регистрации");
+            }
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
     }
 
     public class StarModel

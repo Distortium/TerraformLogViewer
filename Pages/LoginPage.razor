@@ -1,7 +1,10 @@
 ﻿@page "/login"
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Web
+@using TerraformLogViewer.Services
 @inject NavigationManager NavManager
+@inject IUserService UserService
+@inject IJSRuntime JSRuntime
 
 <div class="page-container">
     <!-- Subtle aurora effect -->
@@ -107,17 +110,10 @@
                                 @(_language == "EN" ? "Create account" : "Создать аккаунт")
                             </a>
                         </div>
-
-                        <!-- Forgot password link -->
-                        <div class="forgot-container">
-                            <a href="/forgot-password" class="forgot-link">
-                                @(_language == "EN" ? "Forgot password" : "Забыли пароль")
-                            </a>
-                        </div>
                     </div>
 
                     <!-- Submit button -->
-                    <button class="submit-button slow-transition">
+                    <button class="submit-button slow-transition" @onclick="HandleLogin">
                         @(_language == "EN" ? "Login" : "Войти")
                     </button>
                 </div>
@@ -371,8 +367,7 @@
     /* Links container */
     .links-container {
         display: flex;
-        justify-content: space-between;
-        align-items: center;
+        justify-content: center;
         margin-bottom: 10px;
     }
 
@@ -389,22 +384,6 @@
     }
 
         .register-link:hover {
-            color: rgb(229, 231, 235);
-        }
-
-    /* Forgot password link */
-    .forgot-container {
-        display: flex;
-    }
-
-    .forgot-link {
-        font-size: 0.875rem;
-        color: rgb(156, 163, 175);
-        text-decoration: none;
-        transition: color 0.2s;
-    }
-
-        .forgot-link:hover {
             color: rgb(229, 231, 235);
         }
 
@@ -530,8 +509,8 @@
 </style>
 
 @code {
-    private string _email;
-    private string _password;
+    private string _email = "";
+    private string _password = "";
     private string _language = "EN";
 
     private List<StarModel> Stars = new();
@@ -544,6 +523,50 @@
     private void ToggleLanguage()
     {
         _language = _language == "EN" ? "RU" : "EN";
+    }
+
+    private async Task HandleLogin()
+    {
+        try
+        {
+            // Простая валидация
+            if (string.IsNullOrWhiteSpace(_email) || string.IsNullOrWhiteSpace(_password))
+            {
+                await JSRuntime.InvokeVoidAsync("alert",
+                    _language == "EN" ? "Please fill in all fields" : "Пожалуйста, заполните все поля");
+                return;
+            }
+
+            if (!_email.Contains("@"))
+            {
+                await JSRuntime.InvokeVoidAsync("alert",
+                    _language == "EN" ? "Please enter a valid email" : "Пожалуйста, введите корректный email");
+                return;
+            }
+
+            // Аутентификация через базу данных
+            var user = await UserService.Authenticate(_email, _password);
+
+            if (user == null)
+            {
+                await JSRuntime.InvokeVoidAsync("alert",
+                    _language == "EN" ? "Invalid email or password" : "Неверный email или пароль");
+                return;
+            }
+
+            // Сохраняем информацию о пользователе
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "userEmail", user.Email);
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "userId", user.Id.ToString());
+
+            // Перенаправляем на главную страницу
+            NavManager.NavigateTo("/", true);
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert",
+                _language == "EN" ? "An error occurred during login" : "Произошла ошибка при входе");
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
     }
 
     public class StarModel
