@@ -6,211 +6,199 @@
 
 <PageTitle>Terraform Log Analyzer - Log Visualization</PageTitle>
 
-<div class="cosmic-container">
-    <!-- Stars background -->
-    <div class="stars-container">
-        <div class="stars-layer">
-            @foreach (var s in Stars)
-            {
-                <span class="star" style="@($"left:{s.Left}%; top:{s.Top}%; width:{s.Size}px; height:{s.Size}px; animation-delay:{s.Delay}s")"></span>
-            }
-        </div>
-    </div>
-
-    <!-- Subtle aurora effect -->
-    <div class="aurora" aria-hidden="true"></div>
-
-    <div class="cosmic-layout">
-        <!-- Левая панель фильтров -->
-        <div class="cosmic-sidebar">
-            <div class="cosmic-sidebar-content">
-                <div class="cosmic-panel">
-                    <div class="cosmic-panel-header">
-                        <h5>Search & Filters</h5>
+<div class="container-fluid">
+    <div class="row">
+        <!-- Панель поиска и фильтров -->
+        <div class="col-md-3">
+            <div class="card search-panel">
+                <div class="card-header">
+                    <h5>Search & Filters</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Full Text Search</label>
+                        <input @bind="searchCriteria.FreeText" 
+                               @bind:event="oninput"
+                               class="form-control" 
+                               placeholder="Search in all logs..." />
                     </div>
-                    <div class="cosmic-panel-body">
-                        <div class="cosmic-form-group">
-                            <label class="cosmic-label">Full Text Search</label>
-                            <input @bind="searchCriteria.FreeText"
-                                   @bind:event="oninput"
-                                   class="cosmic-input"
-                                   placeholder="Search in all logs..." />
-                        </div>
 
-                        <div class="cosmic-form-group">
-                            <label class="cosmic-label">Resource Type</label>
-                            <input @bind="searchCriteria.TfResourceType"
-                                   @bind:event="oninput"
-                                   class="cosmic-input"
-                                   placeholder="e.g., t1_compute_instance" />
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label">Resource Type</label>
+                        <input @bind="searchCriteria.TfResourceType" 
+                               @bind:event="oninput"
+                               class="form-control" 
+                               placeholder="e.g., t1_compute_instance" />
+                    </div>
 
-                        <div class="cosmic-form-group">
-                            <label class="cosmic-label">Time Range</label>
-                            <div class="cosmic-time-grid">
-                                <div class="cosmic-time-column">
-                                    <label class="cosmic-label small">From</label>
-                                    <input type="datetime-local"
-                                           @bind="startTime"
-                                           class="cosmic-input cosmic-input-sm" />
-                                </div>
-                                <div class="cosmic-time-column">
-                                    <label class="cosmic-label small">To</label>
-                                    <input type="datetime-local"
-                                           @bind="endTime"
-                                           class="cosmic-input cosmic-input-sm" />
-                                </div>
+                    <div class="mb-3">
+                        <label class="form-label">Time Range</label>
+                        <div class="row">
+                            <div class="col-6">
+                                <label class="form-label small">From</label>
+                                <input type="datetime-local" 
+                                       @bind="startTime"
+                                       class="form-control form-control-sm" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">To</label>
+                                <input type="datetime-local" 
+                                       @bind="endTime"
+                                       class="form-control form-control-sm" />
                             </div>
                         </div>
+                    </div>
 
-                        <div class="cosmic-form-group">
-                            <label class="cosmic-label">Log Level</label>
-                            <select @bind="selectedLogLevel" class="cosmic-select">
-                                <option value="">All Levels</option>
-                                <option value="Error">Error</option>
-                                <option value="Warn">Warning</option>
-                                <option value="Info">Info</option>
-                                <option value="Debug">Debug</option>
-                            </select>
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label">Log Level</label>
+                        <select @bind="selectedLogLevel" class="form-select">
+                            <option value="">All Levels</option>
+                            <option value="Error">Error</option>
+                            <option value="Warn">Warning</option>
+                            <option value="Info">Info</option>
+                            <option value="Debug">Debug</option>
+                        </select>
+                    </div>
 
-                        <div class="cosmic-form-group">
-                            <label class="cosmic-label">Terraform Phase</label>
-                            <select @bind="selectedPhase" class="cosmic-select">
-                                <option value="">All Phases</option>
-                                <option value="Plan">Plan</option>
-                                <option value="Apply">Apply</option>
-                                <option value="Init">Init</option>
-                                <option value="Destroy">Destroy</option>
-                            </select>
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label">Terraform Phase</label>
+                        <select @bind="selectedPhase" class="form-select">
+                            <option value="">All Phases</option>
+                            <option value="Plan">Plan</option>
+                            <option value="Apply">Apply</option>
+                            <option value="Init">Init</option>
+                            <option value="Destroy">Destroy</option>
+                        </select>
+                    </div>
 
-                        <div class="cosmic-checkbox-group">
-                            <input type="checkbox"
-                                   @bind="searchCriteria.UnreadOnly"
-                                   class="cosmic-checkbox" />
-                            <label class="cosmic-checkbox-label">Show Unread Only</label>
-                        </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" 
+                               @bind="searchCriteria.UnreadOnly"
+                               class="form-check-input" />
+                        <label class="form-check-label">Show Unread Only</label>
+                    </div>
 
-                        <div class="cosmic-button-group">
-                            <button @onclick="SearchLogs" class="cosmic-btn cosmic-btn-primary">
-                                <i class="fas fa-search"></i> Search
-                            </button>
-                            <button @onclick="ClearFilters" class="cosmic-btn cosmic-btn-secondary">
-                                <i class="fas fa-times"></i> Clear
-                            </button>
-                        </div>
+                    <div class="d-grid gap-2">
+                        <button @onclick="SearchLogs" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                        <button @onclick="ClearFilters" class="btn btn-outline-secondary">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
                     </div>
                 </div>
+            </div>
 
-                <!-- Статистика -->
-                <div class="cosmic-panel cosmic-stats-panel">
-                    <div class="cosmic-panel-header">
-                        <h6>Statistics</h6>
-                    </div>
-                    <div class="cosmic-panel-body">
-                        <div class="cosmic-stats">
-                            <div>Total Results: <strong>@totalRecords</strong></div>
-                            <div>Errors: <span class="cosmic-error"><strong>@errorCount</strong></span></div>
-                            <div>Warnings: <span class="cosmic-warning"><strong>@warningCount</strong></span></div>
-                            <div>Unread: <strong>@unreadCount</strong></div>
-                            <div>Current Page: <strong>@currentPage of @totalPages</strong></div>
-                        </div>
+            <!-- Статистика -->
+            <div class="card mt-3" id="statistics-panel">
+                <div class="card-header">
+                    <h6>Statistics</h6>
+                </div>
+                <div class="card-body">
+                    <div class="small">
+                        <div>Total Results: <strong>@totalRecords</strong></div>
+                        <div>Errors: <span class="text-danger"><strong>@errorCount</strong></span></div>
+                        <div>Warnings: <span class="text-warning"><strong>@warningCount</strong></span></div>
+                        <div>Unread: <strong>@unreadCount</strong></div>
+                        <div>Current Page: <strong>@currentPage of @totalPages</strong></div>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Основная панель с логами -->
-        <div class="cosmic-main">
-            <div class="cosmic-view-controls">
-                <button @onclick="ShowLogView" class="cosmic-view-btn @(currentView == ViewType.List ? "cosmic-view-active" : "")">
-                    <i class="fas fa-list"></i> List View
-                </button>
-                <button @onclick="ShowTimelineView" class="cosmic-view-btn @(currentView == ViewType.Timeline ? "cosmic-view-active" : "")">
-                    <i class="fas fa-chart-bar"></i> Timeline
-                </button>
-            </div>
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>Log Entries</h5>
+                    <div>
+                        <button @onclick="ShowLogView" class="btn @(currentView == ViewType.List ? "btn-primary" : "btn-outline-primary") btn-sm">
+                            <i class="fas fa-list"></i> List View
+                        </button>
+                        <button @onclick="ShowTimelineView" class="btn @(currentView == ViewType.Timeline ? "btn-primary" : "btn-outline-primary") btn-sm">
+                            <i class="fas fa-chart-bar"></i> Timeline
+                        </button>
+                    </div>
+                </div>
 
-            <div class="cosmic-content-area">
                 @if (currentView == ViewType.List)
                 {
-                    <div class="cosmic-content-panel">
+                    <div class="card-body">
                         <!-- Панель управления пагинацией -->
-                        <div class="cosmic-pagination-controls">
-                            <div class="cosmic-page-size">
-                                <span class="cosmic-label">Show</span>
-                                <select @bind:get="pageSize" @bind:set="OnPageSizeChanged" class="cosmic-select cosmic-select-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="small text-muted">Show</span>
+                                <select @bind:get="pageSize" @bind:set="OnPageSizeChanged" class="form-select form-select-sm" style="width: 65px;">
                                     <option value="10">10</option>
                                     <option value="25">25</option>
                                     <option value="50">50</option>
                                     <option value="100">100</option>
                                 </select>
-                                <span class="cosmic-label">entries per page</span>
+                                <span class="small text-muted">entries per page</span>
                             </div>
-
-                            <div class="cosmic-page-info">
+                            
+                            <div class="small text-muted">
                                 Showing @startRecord to @endRecord of @totalRecords entries
                             </div>
                         </div>
 
                         @if (isLoading)
                         {
-                            <div class="cosmic-loading">
-                                <div class="cosmic-spinner"></div>
-                                <div class="cosmic-loading-text">Loading log entries...</div>
+                            <div class="text-center py-4">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <div class="mt-2 text-muted">Loading log entries...</div>
                             </div>
                         }
                         else if (!pagedResults.Any())
                         {
-                            <div class="cosmic-empty-state">
-                                <i class="fas fa-inbox cosmic-empty-icon"></i>
+                            <div class="text-center text-muted py-5">
+                                <i class="fas fa-inbox fa-3x mb-3"></i>
                                 <p>No log entries found. Try adjusting your search criteria.</p>
                             </div>
                         }
                         else
                         {
-                            <div class="cosmic-log-container">
-                                <div class="cosmic-log-sheet">
-                                    @foreach (var entry in pagedResults)
-                                    {
-                                        <LogEntryView Entry="entry"
-                                                      OnMarkAsRead="MarkAsRead"
-                                                      OnMarkAsUnread="MarkAsUnread" />
-                                    }
-                                </div>
+                            <div class="log-entries">
+                                @foreach (var entry in pagedResults)
+                                {
+                                    <LogEntryView Entry="entry" 
+                                                 OnMarkAsRead="MarkAsRead"
+                                                 OnMarkAsUnread="MarkAsUnread" />
+                                }
                             </div>
 
                             <!-- Пагинация -->
                             @if (totalPages > 1)
                             {
-                                <nav class="cosmic-pagination">
-                                    <ul class="cosmic-pagination-list">
-                                        <li class="cosmic-page-item @(currentPage == 1 ? "cosmic-page-disabled" : "")">
-                                            <button class="cosmic-page-link" @onclick="() => ChangePage(1)" aria-label="First">
+                                <nav aria-label="Log entries pagination" class="mt-4">
+                                    <ul class="pagination justify-content-center mb-0">
+                                        <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                            <button class="page-link" @onclick="() => ChangePage(1)" aria-label="First">
                                                 <i class="fas fa-angle-double-left"></i>
                                             </button>
                                         </li>
-                                        <li class="cosmic-page-item @(currentPage == 1 ? "cosmic-page-disabled" : "")">
-                                            <button class="cosmic-page-link" @onclick="() => ChangePage(currentPage - 1)" aria-label="Previous">
+                                        <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                            <button class="page-link" @onclick="() => ChangePage(currentPage - 1)" aria-label="Previous">
                                                 <i class="fas fa-angle-left"></i>
                                             </button>
                                         </li>
 
                                         @foreach (var pageNum in GetVisiblePages())
                                         {
-                                            <li class="cosmic-page-item @(pageNum == currentPage ? "cosmic-page-active" : "")">
-                                                <button class="cosmic-page-link" @onclick="() => ChangePage(pageNum)">@pageNum</button>
+                                            <li class="page-item @(pageNum == currentPage ? "active" : "")">
+                                                <button class="page-link" @onclick="() => ChangePage(pageNum)">@pageNum</button>
                                             </li>
                                         }
 
-                                        <li class="cosmic-page-item @(currentPage == totalPages ? "cosmic-page-disabled" : "")">
-                                            <button class="cosmic-page-link" @onclick="() => ChangePage(currentPage + 1)" aria-label="Next">
+                                        <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                            <button class="page-link" @onclick="() => ChangePage(currentPage + 1)" aria-label="Next">
                                                 <i class="fas fa-angle-right"></i>
                                             </button>
                                         </li>
-                                        <li class="cosmic-page-item @(currentPage == totalPages ? "cosmic-page-disabled" : "")">
-                                            <button class="cosmic-page-link" @onclick="() => ChangePage(totalPages)" aria-label="Last">
+                                        <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                            <button class="page-link" @onclick="() => ChangePage(totalPages)" aria-label="Last">
                                                 <i class="fas fa-angle-double-right"></i>
                                             </button>
                                         </li>
@@ -222,7 +210,7 @@
                 }
                 else
                 {
-                    <div class="cosmic-content-panel">
+                    <div class="card-body">
                         <TimelineView LogFileId="LogFileId" />
                     </div>
                 }
@@ -230,10 +218,6 @@
         </div>
     </div>
 </div>
-
-<style>
-
-</style>
 
 @code {
     [Parameter] public Guid LogFileId { get; set; }
@@ -263,32 +247,9 @@
     private int warningCount = 0;
     private int unreadCount = 0;
 
-    // Stars for background
-    private List<StarModel> Stars = new();
-
     protected override async Task OnInitializedAsync()
     {
-        Stars = GenerateStars(80);
         await LoadInitialData();
-    }
-
-    private List<StarModel> GenerateStars(int count)
-    {
-        var stars = new List<StarModel>();
-        var random = new Random();
-
-        for (int i = 0; i < count; i++)
-        {
-            stars.Add(new StarModel
-            {
-                Left = random.Next(0, 100),
-                Top = random.Next(0, 100),
-                Size = random.Next(1, 3),
-                Delay = random.NextDouble() * 5
-            });
-        }
-
-        return stars;
     }
 
     private async Task LoadInitialData()
@@ -361,8 +322,8 @@
         currentPage = 1;
 
         // Применяем фильтры из элементов управления UI
-        searchCriteria.MinLogLevel = string.IsNullOrEmpty(selectedLogLevel)
-            ? null
+        searchCriteria.MinLogLevel = string.IsNullOrEmpty(selectedLogLevel) 
+            ? null 
             : Enum.Parse<LogLevel>(selectedLogLevel);
 
         searchCriteria.Phase = string.IsNullOrEmpty(selectedPhase)
@@ -440,13 +401,5 @@
         pageSize = newSizePage;
         currentPage = 1;
         await LoadInitialData();
-    }
-
-    public class StarModel
-    {
-        public double Left { get; set; }
-        public double Top { get; set; }
-        public double Size { get; set; }
-        public double Delay { get; set; }
     }
 }
