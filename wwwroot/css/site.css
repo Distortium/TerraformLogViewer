@@ -1,5 +1,47 @@
 @import url('open-iconic/font/css/open-iconic-bootstrap.min.css');
 
+/* wwwroot/css/site.css */
+
+/* Cosmic theme base styles */
+.cosmic-theme {
+    background: #000000 !important;
+    color: #e0e0e0 !important;
+}
+
+.cosmic-container {
+    background: transparent !important;
+    color: #e0e0e0 !important;
+}
+
+/* Ensure all main containers use cosmic styling */
+.main, .container, .content {
+    background: transparent !important;
+    color: inherit !important;
+}
+
+/* Override Bootstrap defaults for cosmic theme */
+.cosmic-theme .btn-primary {
+    background: linear-gradient(135deg, #409cff 0%, #0066cc 100%) !important;
+    border-color: #409cff !important;
+}
+
+.cosmic-theme .card {
+    background: rgba(0, 0, 0, 0.4) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #e0e0e0 !important;
+}
+
+.cosmic-theme .form-control {
+    background: rgba(0, 0, 0, 0.6) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+}
+
+    .cosmic-theme .form-control:focus {
+        border-color: #409cff !important;
+        box-shadow: 0 0 0 0.2rem rgba(64, 156, 255, 0.25) !important;
+    }
+
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }

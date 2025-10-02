@@ -1,66 +1,44 @@
-﻿// Функция для прокрутки к верху страницы
+﻿// wwwroot/js/app.js
+
+// Scroll to top function
 function scrollToTop() {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-// Функция для клика по элементу (для открытия диалога выбора файла)
-function click(element) {
-    element.click();
-}
-
-// Функция для показа уведомлений
-function showToast(type, title, message) {
-    // Создаем контейнер для уведомлений если его нет
-    let container = document.getElementById('toast-container');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'toast-container';
-        container.className = 'toast-container position-fixed top-0 end-0 p-3';
-        container.style.zIndex = '1060';
-        document.body.appendChild(container);
-    }
-
-    // Создаем уведомление
-    const toastId = 'toast-' + Date.now();
-    const toastHtml = `
-        <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="toast-header">
-                <strong class="me-auto">${title}</strong>
-                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-            </div>
-            <div class="toast-body">
-                ${message}
-            </div>
-        </div>
-    `;
-
-    container.insertAdjacentHTML('beforeend', toastHtml);
-
-    // Добавляем классы в зависимости от типа
-    const toastElement = document.getElementById(toastId);
-    const toastHeader = toastElement.querySelector('.toast-header');
-
-    switch (type) {
-        case 'success':
-            toastHeader.classList.add('text-white', 'bg-success');
-            break;
-        case 'error':
-            toastHeader.classList.add('text-white', 'bg-danger');
-            break;
-        case 'warning':
-            toastHeader.classList.add('text-dark', 'bg-warning');
-            break;
-        case 'info':
-            toastHeader.classList.add('text-white', 'bg-info');
-            break;
-    }
-
-    // Инициализируем и показываем уведомление
-    const toast = new bootstrap.Toast(toastElement);
-    toast.show();
-
-    // Удаляем уведомление из DOM после скрытия
-    toastElement.addEventListener('hidden.bs.toast', function () {
-        this.remove();
+    window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
     });
 }
+
+// Initialize cosmic theme
+function initializeCosmicTheme() {
+    // Add cosmic class to body for consistent styling
+    document.body.classList.add('cosmic-theme');
+
+    // Update any existing elements with cosmic styling
+    const mainContainer = document.querySelector('.container, main');
+    if (mainContainer && !mainContainer.classList.contains('cosmic-container')) {
+        mainContainer.classList.add('cosmic-container');
+    }
+}
+
+// Handle Blazor navigation and apply cosmic styles
+function handleBlazorNavigation() {
+    // This would be called on Blazor navigation events
+    setTimeout(initializeCosmicTheme, 100);
+}
+
+// Export functions for Blazor
+window.CosmicTheme = {
+    scrollToTop: scrollToTop,
+    initialize: initializeCosmicTheme,
+    handleNavigation: handleBlazorNavigation
+};
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', function () {
+    initializeCosmicTheme();
+
+    // Re-initialize when Blazor finishes loading
+    if (window.Blazor) {
+        setTimeout(initializeCosmicTheme, 1000);
+    }
+});

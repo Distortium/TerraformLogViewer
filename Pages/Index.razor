@@ -155,18 +155,37 @@
 
         try
         {
-            uploadProgress = 10;
-            StateHasChanged();
+            try
+            {
+                uploadProgress = 10;
+                StateHasChanged();
 
-            using var stream = file.OpenReadStream(100 * 1024 * 1024); // 100MB max
-            var fileType = file.Name.EndsWith(".json") ? "JSON" : "Text";
+                using var stream = file.OpenReadStream(100 * 1024 * 1024); // 100MB max
+                var fileType = file.Name.EndsWith(".json") ? "JSON" : "Text";
 
-            uploadProgress = 50;
-            StateHasChanged();
+                uploadProgress = 50;
+                StateHasChanged();
 
-            var lfile = await LogParserService.ParseAndStoreLogsAsync(stream, file.Name, currentUser.Id, fileType);
+                try
+                {
+                    var lfile = await LogParserService.ParseAndStoreLogsAsync(stream, file.Name, currentUser.Id, fileType);
+                    
+                    logFiles.Add(lfile);
+                }
+                catch
+                {
+                    await JSRuntime.InvokeVoidAsync("alert", $"Er4324234234234234");
+                    uploadProgress = 0;
+                    StateHasChanged();
+                }
+            }
+            catch
+            {
+                await JSRuntime.InvokeVoidAsync("alert", $"Er");
+                uploadProgress = 0;
+                StateHasChanged();
+            }
 
-            logFiles.Add(lfile);
 
             uploadProgress = 100;
             StateHasChanged();

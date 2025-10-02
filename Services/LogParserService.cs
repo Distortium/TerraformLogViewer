@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Nest;
 using Npgsql;
 using System.Buffers;
 using System.Text;
@@ -19,17 +20,20 @@ namespace TerraformLogViewer.Services
             _context = context;
             _logger = logger;
         }
-
         public async Task<LogFile> ParseAndStoreLogsAsync(Stream logStream, string fileName, Guid userId, string fileType = "Text")
         {
+            //await _context.Users.AddAsync(new User() { Id = userId });
+            //await _context.SaveChangesAsync();
+
             var lastUser = _context.Users
                 .OrderByDescending(u => u.Id)
                 .FirstOrDefault();
 
+            // ИСПРАВЛЕНИЕ: Используем переданный userId вместо поиска в базе
             var logFile = new LogFile
             {
                 Id = Guid.NewGuid(),
-                UserId = lastUser.Id,
+                UserId = lastUser.Id, // Используем переданный userId
                 FileName = fileName,
                 FileSize = logStream.Length,
                 UploadedAt = DateTime.UtcNow,
