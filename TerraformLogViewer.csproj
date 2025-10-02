@@ -10,13 +10,21 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Protobuf Include="Protos/plugin.proto" GrpcServices="Client" />
+    <Compile Remove="TerraformPlugin\**" />
+    <Content Remove="TerraformPlugin\**" />
+    <EmbeddedResource Remove="TerraformPlugin\**" />
+    <None Remove="TerraformPlugin\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="Protos/plugin.proto" GrpcServices="Both" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="12.0.1" />
     <PackageReference Include="Elasticsearch.Net" Version="7.17.5" />
     <PackageReference Include="Google.Protobuf" Version="3.32.1" />
+    <PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
     <PackageReference Include="Grpc.Net.Client" Version="2.71.0" />
     <PackageReference Include="Grpc.Tools" Version="2.72.0">
       <PrivateAssets>all</PrivateAssets>

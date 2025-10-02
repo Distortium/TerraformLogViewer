@@ -52,7 +52,6 @@ namespace TerraformLogViewer.Controllers
                     fileName = file.FileName;
                 }
 
-                // Получаем или создаем пользователя
                 var user = await GetOrCreateUser(userId);
 
                 using var stream = file.OpenReadStream();
@@ -245,12 +244,7 @@ namespace TerraformLogViewer.Controllers
         {
             try
             {
-                // Здесь можно интегрировать с внешними системами:
-                // - Slack
-                // - PagerDuty
-                // - OpsGenie
-                // - Email
-                // - Webhook
+                // Здесь можно интегрировать внешние системы
 
                 var alertResponse = new AlertResponse
                 {
@@ -293,7 +287,7 @@ namespace TerraformLogViewer.Controllers
 
         private async Task<Models.User> GetOrCreateUser(string? userId)
         {
-            /*if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var userGuid))
+            if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var userGuid))
             {
                 var existingUser = await _context.Users.FindAsync(userGuid);
                 if (existingUser != null)
@@ -302,11 +296,9 @@ namespace TerraformLogViewer.Controllers
                 }
             }
 
-            // Создаем нового пользователя
             var user = new Models.User
             {
                 Id = Guid.NewGuid(),
-                Username = $"api_user_{DateTime.UtcNow:yyyyMMddHHmmss}",
                 Email = "api@example.com",
                 CreatedAt = DateTime.UtcNow
             };
@@ -314,8 +306,7 @@ namespace TerraformLogViewer.Controllers
             await _context.Users.AddAsync(user);
             await _context.SaveChangesAsync();
 
-            return user;*/
-            return null;
+            return user;
         }
 
         private LogEntryDto MapToDto(LogEntry entry)
@@ -373,8 +364,6 @@ namespace TerraformLogViewer.Controllers
         {
             try
             {
-                // Здесь можно реализовать отправку webhook уведомлений
-                // на настроенные URL-адреса
                 var notification = new WebhookNotification
                 {
                     EventType = eventType,
@@ -383,12 +372,8 @@ namespace TerraformLogViewer.Controllers
                     Data = data
                 };
 
-                // Пример отправки webhook (реализация зависит от ваших требований)
                 _logger.LogInformation("Webhook notification: {EventType} for log file {LogFileId}",
                     eventType, logFileId);
-
-                // Реальная реализация может использовать HttpClient
-                // для отправки POST запросов на настроенные webhook URL
             }
             catch (Exception ex)
             {

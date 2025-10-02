@@ -5,6 +5,8 @@ VisualStudioVersion = 17.14.36414.22
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TerraformLogViewer", "TerraformLogViewer.csproj", "{884F68A8-30FD-4D6D-BA04-AC0B5D7EFDE2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TerraformPlugin", "TerraformPlugin\TerraformPlugin.csproj", "{C135A777-4497-4586-BA73-5D9587E6EC9C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{884F68A8-30FD-4D6D-BA04-AC0B5D7EFDE2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{884F68A8-30FD-4D6D-BA04-AC0B5D7EFDE2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{884F68A8-30FD-4D6D-BA04-AC0B5D7EFDE2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C135A777-4497-4586-BA73-5D9587E6EC9C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C135A777-4497-4586-BA73-5D9587E6EC9C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C135A777-4497-4586-BA73-5D9587E6EC9C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C135A777-4497-4586-BA73-5D9587E6EC9C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

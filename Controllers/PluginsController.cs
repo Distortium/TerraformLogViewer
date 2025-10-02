@@ -119,7 +119,7 @@ namespace TerraformLogViewer.Controllers
             return new LogEntryDto();
         }
 
-        private ErrorGroupDto MapToDto(ErrorGroup group)
+        private ErrorGroupDto MapToDto(Grpc.ErrorGroup group)
         {
             return new ErrorGroupDto
             {

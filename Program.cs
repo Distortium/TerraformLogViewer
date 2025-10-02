@@ -37,6 +37,7 @@ namespace TerraformLogViewer
             builder.Services.AddScoped<VisualizationService>();
             builder.Services.AddScoped<IntegrationService>();
             builder.Services.AddScoped<IUserService, UserService>();
+            builder.Services.AddControllers();
 
             // HTTP Client
             builder.Services.AddHttpClient<IntegrationService>();
@@ -50,6 +51,27 @@ namespace TerraformLogViewer
                           .AllowCredentials();
                 });
             });
+
+            // gRPC
+            builder.Services.AddGrpc();
+            builder.Services.AddSingleton<PluginHostService>();
+
+            // Регистрируем плагины из конфигурации
+            var pluginConfig = builder.Configuration.GetSection("Plugins");
+            foreach (var plugin in pluginConfig.GetChildren())
+            {
+                var name = plugin["Name"];
+                var endpoint = plugin["Endpoint"];
+                var type = Enum.Parse<PluginType>(plugin["Type"] ?? "Filter");
+
+                // Регистрируем при старте приложения
+                builder.Services.AddSingleton(provider =>
+                {
+                    var pluginService = provider.GetRequiredService<PluginHostService>();
+                    pluginService.RegisterPlugin(name, endpoint, type);
+                    return pluginService;
+                });
+            }
 
             var app = builder.Build();
 
@@ -71,34 +93,10 @@ namespace TerraformLogViewer
                     //await context.Database.EnsureCreatedAsync();
                     await context.Database.MigrateAsync();
                     logger.LogInformation("Database initialized successfully");
-
-                    // Initialize Elasticsearch with retry
-                    /*
-                    var elasticSearch = services.GetRequiredService<ElasticSearchService>();
-                    var elasticReady = await WaitForElasticsearchAsync(elasticSearch, logger);
-
-                    if (elasticReady)
-                    {
-                        try
-                        {
-                            await elasticSearch.CreateIndexAsync();
-                            logger.LogInformation("Elasticsearch initialized successfully");
-                        }
-                        catch (Exception ex)
-                        {
-                            // �������� ������, �� �� ��������� ����������
-                            logger.LogWarning("Failed to create Elasticsearch index, but continuing: {Error}", ex.Message);
-                        }
-                    }
-                    else
-                    {
-                        logger.LogWarning("Elasticsearch is not available, but continuing without it");
-                    }*/
                 }
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "An error occurred during initialization");
-                    // �� ������� ���������� - ��������� ���������� �����������
                 }
             }
 
@@ -113,10 +111,10 @@ namespace TerraformLogViewer
             app.UseStaticFiles();
             app.UseRouting();
             //app.UseSession();
+            app.MapControllers();
             app.MapBlazorHub();
             app.MapFallbackToPage("/_Host");
 
-            // ��������� ����������
             try
             {
                 await app.RunAsync();
