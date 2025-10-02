@@ -22,18 +22,10 @@ namespace TerraformLogViewer.Services
         }
         public async Task<LogFile> ParseAndStoreLogsAsync(Stream logStream, string fileName, Guid userId, string fileType = "Text")
         {
-            //await _context.Users.AddAsync(new User() { Id = userId });
-            //await _context.SaveChangesAsync();
-
-            var lastUser = _context.Users
-                .OrderByDescending(u => u.Id)
-                .FirstOrDefault();
-
-            // ИСПРАВЛЕНИЕ: Используем переданный userId вместо поиска в базе
             var logFile = new LogFile
             {
                 Id = Guid.NewGuid(),
-                UserId = lastUser.Id, // Используем переданный userId
+                UserId = userId,
                 FileName = fileName,
                 FileSize = logStream.Length,
                 UploadedAt = DateTime.UtcNow,
@@ -67,6 +59,16 @@ namespace TerraformLogViewer.Services
                 : ParseTextLogsStreamingAsync(logStream, logFileId, stats);
 
             return (entries, stats);
+        }
+
+        public async Task<List<LogFile>?> GetUserLogFilesAsync(Guid userId)
+        {
+            List<LogFile>? files = null;
+
+            if (_context.LogFiles.Any(t => t.UserId == userId))
+                files = await _context.LogFiles.Where(t => t.UserId == userId).ToListAsync();
+
+            return files;
         }
 
         private async IAsyncEnumerable<LogEntry> ParseTextLogsStreamingAsync(Stream logStream, Guid logFileId, ParseStats stats)

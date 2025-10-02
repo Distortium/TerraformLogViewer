@@ -116,20 +116,22 @@
 @code {
     private List<LogFile> logFiles = new();
     private int uploadProgress = 0;
-    private User? currentUser;
     private Guid? currentUserId = null;
-    private string currentUserEmail = string.Empty;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        await LoadCurrentUser();
-        await LoadLogFiles();
+        if (firstRender)
+        {
+            await LoadCurrentUser();
+            await LoadLogFiles();
+        }
+
+        await base.OnAfterRenderAsync(firstRender);
     }
 
     private async Task LoadCurrentUser()
     {
         currentUserId = await AuthService.GetCurrentUserIdAsync();
-        currentUserEmail = await AuthService.GetCurrentUserEmailAsync() ?? "Unknown User";
 
         if (currentUserId == null)
         {
@@ -137,7 +139,7 @@
             return;
         }
 
-        Console.WriteLine($"Current user ID: {currentUserId}, Email: {currentUserEmail}");
+        Console.WriteLine($"Current user ID: {currentUserId}");
     }
 
     private async Task OpenFileDialog()
@@ -155,8 +157,12 @@
 
     private async Task UploadFile(IBrowserFile file)
     {
-        //if (currentUser == null) return;
-        currentUser = new User() { Id = Guid.NewGuid() }; // TEMP - ЗАГЛУШКА
+        if (currentUserId == null)
+        {
+            await LoadCurrentUser();
+            if (currentUserId == null)
+                return;
+        }
 
         try
         {
@@ -171,25 +177,7 @@
                 uploadProgress = 50;
                 StateHasChanged();
 
-                try
-                {
-                    var lfile = await LogParserService.ParseAndStoreLogsAsync(stream, file.Name, currentUser.Id, fileType);
-                    
-                    logFiles.Add(lfile);
-                }
-                catch
-                {
-                    await JSRuntime.InvokeVoidAsync("alert", $"Er4324234234234234");
-                    uploadProgress = 0;
-                    StateHasChanged();
-                }
-            }
-            catch
-            {
-                await JSRuntime.InvokeVoidAsync("alert", $"Er");
-                uploadProgress = 0;
-                StateHasChanged();
-            }
+            var lfile = await LogParserService.ParseAndStoreLogsAsync(stream, file.Name, currentUserId.Value, fileType);
 
 
             uploadProgress = 100;
@@ -228,10 +216,11 @@
             try
             {
                 // Здесь должен быть вызов сервиса для загрузки файлов пользователя
-                // logFiles = await LogParserService.GetUserLogFilesAsync(currentUserId.Value);
+                var tempFiles = await LogParserService.GetUserLogFilesAsync(currentUserId.Value);
 
-                // Временная заглушка
-                logFiles = new List<LogFile>();
+                if (tempFiles != null)
+                    logFiles = tempFiles;
+
                 StateHasChanged();
             }
             catch (Exception ex)
