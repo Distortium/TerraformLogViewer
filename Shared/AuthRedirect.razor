@@ -1,0 +1,52 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<CascadingAuthenticationState>
+    <AuthorizeView>
+        <Authorized>
+            @ChildContent
+        </Authorized>
+        <NotAuthorized>
+            @if (!_isRedirecting)
+            {
+                <p>Redirecting to login...</p>
+            }
+        </NotAuthorized>
+    </AuthorizeView>
+</CascadingAuthenticationState>
+
+@code {
+    [Parameter] public RenderFragment ChildContent { get; set; }
+    [CascadingParameter] private Task<AuthenticationState> AuthenticationStateTask { get; set; }
+
+    private bool _isRedirecting = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var authState = await AuthenticationStateTask;
+            var user = authState.User;
+
+            if (!user.Identity.IsAuthenticated)
+            {
+                // Дополнительная проверка через JS
+                var isAuthenticated = await JSRuntime.InvokeAsync<string>("sessionStorage.getItem", "auth_authenticated");
+                if (isAuthenticated != "true")
+                {
+                    _isRedirecting = true;
+                    StateHasChanged();
+
+                    // Проверяем, что мы не на странице логина
+                    var currentUri = Navigation.Uri;
+                    if (!currentUri.Contains("/login") && !currentUri.Contains("/register"))
+                    {
+                        await Task.Delay(100);
+                        Navigation.NavigateTo("/login");
+                    }
+                }
+            }
+        }
+    }
+}

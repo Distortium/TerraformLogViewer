@@ -433,6 +433,24 @@
 
     <script src="_framework/blazor.server.js"></script>
     <script src="~/js/app.js"></script>
+    <script>
+        // Функция для отладки аутентификации
+        window.authDebug = {
+            getAuthStatus: function() {
+                return {
+                    authenticated: sessionStorage.getItem('auth_authenticated'),
+                    email: sessionStorage.getItem('auth_email'),
+                    userId: sessionStorage.getItem('auth_userId'),
+                    timestamp: sessionStorage.getItem('auth_timestamp')
+                };
+            },
+            clearAuth: function() {
+                sessionStorage.removeItem('auth_authenticated');
+                sessionStorage.removeItem('auth_email');
+                sessionStorage.removeItem('auth_userId');
+                sessionStorage.removeItem('auth_timestamp');
+            }
+        };
 
     <script>
         // Generate stars for background

@@ -7,7 +7,7 @@ namespace TerraformLogViewer.Services
 {
     public interface IUserService
     {
-        Task<User> Authenticate(string email, string password);
+        Task<User?> Authenticate(string email, string password);
         Task<User> Register(string email, string password);
         Task<bool> UserExists(string email);
     }
@@ -21,7 +21,7 @@ namespace TerraformLogViewer.Services
             _context = context;
         }
 
-        public async Task<User> Authenticate(string email, string password)
+        public async Task<User?> Authenticate(string email, string password)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
 
@@ -42,6 +42,7 @@ namespace TerraformLogViewer.Services
 
             var user = new User
             {
+                Id = Guid.NewGuid(),
                 Email = email,
                 PasswordHash = HashPassword(password),
                 CreatedAt = DateTime.UtcNow,

@@ -1,11 +1,40 @@
 ﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
 
-<PageTitle>TerraformLogViewer</PageTitle>
+<AuthorizeView>
+    <Authorized>
+        <div class="page">
+            <div class="sidebar">
+                <NavMenu />
+            </div>
 
-<div class="page">
-    <main>
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
-</div>
+            <main>
+                <div class="top-row px-4 auth-section">
+                    <span class="text-light me-3">Hello, @context.User.Identity.Name!</span>
+                    <button class="btn btn-outline-light btn-sm" @onclick="Logout">Logout</button>
+                </div>
+
+                <article class="content px-4">
+                    @Body
+                </article>
+            </main>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <!-- Для неавторизованных показываем контент как есть -->
+        @Body
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Inject] private AuthService AuthService { get; set; }
+    [Inject] private NavigationManager Navigation { get; set; }
+    [Inject] private CustomAuthStateProvider AuthStateProvider { get; set; }
+
+    private async Task Logout()
+    {
+        await AuthService.LogoutAsync();
+        AuthStateProvider.NotifyAuthenticationStateChanged();
+        Navigation.NavigateTo("/login");
+    }
+}

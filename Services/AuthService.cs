@@ -1,107 +1,137 @@
-﻿using Microsoft.AspNetCore.Authentication;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.JSInterop;
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
-using TerraformLogViewer.Models;
 
 namespace TerraformLogViewer.Services
 {
     public class AuthService
     {
-        private readonly AppDbContext _context;
-        private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly IUserService _userService;
+        private readonly IJSRuntime _jsRuntime;
 
-        public AuthService(AppDbContext context, IHttpContextAccessor httpContextAccessor)
+        public AuthService(IUserService userService, IJSRuntime jsRuntime)
         {
-            _context = context;
-            _httpContextAccessor = httpContextAccessor;
+            _userService = userService;
+            _jsRuntime = jsRuntime;
         }
 
-        public async Task<User?> RegisterAsync(string email, string password)
+        public async Task<bool> LoginAsync(string email, string password)
         {
-            if (await _context.Users.AnyAsync(u => u.Email == email))
-                return null;
-
-            var user = new User
+            try
             {
-                Email = email,
-                PasswordHash = HashPassword(password),
-                CreatedAt = DateTime.UtcNow,
-                LastLogin = DateTime.UtcNow
-            };
-
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
-            return user;
+                var user = await _userService.Authenticate(email, password);
+                if (user != null)
+                {
+                    // Используем комбинацию sessionStorage и проверку на сервере
+                    await _jsRuntime.InvokeVoidAsync("sessionStorage.setItem", "auth_email", user.Email);
+                    await _jsRuntime.InvokeVoidAsync("sessionStorage.setItem", "auth_userId", user.Id.ToString());
+                    await _jsRuntime.InvokeVoidAsync("sessionStorage.setItem", "auth_authenticated", "true");
+                    await _jsRuntime.InvokeVoidAsync("sessionStorage.setItem", "auth_timestamp", DateTime.UtcNow.Ticks.ToString());
+                    return true;
+                }
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
-        public async Task<User?> LoginAsync(string email, string password)
+        public async Task LogoutAsync()
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
-            if (user == null || !VerifyPassword(password, user.PasswordHash))
+            try
+            {
+                await _jsRuntime.InvokeVoidAsync("sessionStorage.removeItem", "auth_email");
+                await _jsRuntime.InvokeVoidAsync("sessionStorage.removeItem", "auth_userId");
+                await _jsRuntime.InvokeVoidAsync("sessionStorage.removeItem", "auth_authenticated");
+                await _jsRuntime.InvokeVoidAsync("sessionStorage.removeItem", "auth_timestamp");
+            }
+            catch
+            {
+                // Игнорируем ошибки при logout
+            }
+        }
+
+        public async Task<bool> IsAuthenticatedAsync()
+        {
+            try
+            {
+                var isAuth = await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", "auth_authenticated");
+                var timestamp = await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", "auth_timestamp");
+
+                if (isAuth == "true" && !string.IsNullOrEmpty(timestamp))
+                {
+                    // Проверяем, что аутентификация не слишком старая (максимум 24 часа)
+                    var authTime = new DateTime(long.Parse(timestamp));
+                    return (DateTime.UtcNow - authTime).TotalHours < 24;
+                }
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<Guid?> GetCurrentUserIdAsync()
+        {
+            try
+            {
+                var userIdString = await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", "auth_userId");
+                if (!string.IsNullOrEmpty(userIdString) && Guid.TryParse(userIdString, out var userId))
+                {
+                    return userId;
+                }
                 return null;
-
-            user.LastLogin = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
-
-            SetUserSession(user.Id);
-
-            await SignInUserAsync(user.Id.ToString());
-            return user;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
-        public async Task<User?> GetCurrentUserAsync()
+        public async Task<string?> GetCurrentUserEmailAsync()
         {
-            var userId = GetCurrentUserId();
-            if (userId == null) return null;
-
-            return await _context.Users.FindAsync(userId);
+            try
+            {
+                return await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", "auth_email");
+            }
+            catch
+            {
+                return null;
+            }
         }
 
-        public void Logout()
+        public async Task<ClaimsPrincipal> GetUserAsync()
         {
-            SignOutAsync(_httpContextAccessor.HttpContext?.Session.GetString("UserId"));
+            var isAuthenticated = await IsAuthenticatedAsync();
+            if (isAuthenticated)
+            {
+                try
+                {
+                    var email = await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", "auth_email");
+                    var userId = await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", "auth_userId");
 
-            _httpContextAccessor.HttpContext?.Session.Remove("UserId");
-        }
+                    if (!string.IsNullOrEmpty(email) && !string.IsNullOrEmpty(userId))
+                    {
+                        var claims = new List<Claim>
+                        {
+                            new Claim(ClaimTypes.Name, email),
+                            new Claim(ClaimTypes.NameIdentifier, userId),
+                            new Claim(ClaimTypes.Email, email)
+                        };
 
-        private void SetUserSession(Guid userId)
-        {
-            _httpContextAccessor.HttpContext?.Session.SetString("UserId", userId.ToString());
-        }
+                        var identity = new ClaimsIdentity(claims, "CustomAuth");
+                        return new ClaimsPrincipal(identity);
+                    }
+                }
+                catch
+                {
+                    // Если произошла ошибка, считаем неавторизованным
+                }
+            }
 
-        private Guid? GetCurrentUserId()
-        {
-            var userIdString = _httpContextAccessor.HttpContext?.Session.GetString("UserId");
-            return Guid.TryParse(userIdString, out var userId) ? userId : null;
-        }
-
-        private string HashPassword(string password)
-        {
-            using var sha256 = SHA256.Create();
-            var bytes = Encoding.UTF8.GetBytes(password);
-            var hash = sha256.ComputeHash(bytes);
-            return Convert.ToBase64String(hash);
-        }
-
-        private bool VerifyPassword(string password, string passwordHash)
-        {
-            return HashPassword(password) == passwordHash;
-        }
-
-        public async Task SignInUserAsync(string userId)
-        {
-            var claims = new[] { new Claim(ClaimTypes.NameIdentifier, userId) };
-            var identity = new ClaimsIdentity(claims, "Cookies");
-            var principal = new ClaimsPrincipal(identity);
-            await _httpContextAccessor.HttpContext.SignInAsync("Cookies", principal);
-            _httpContextAccessor.HttpContext.Session.SetString("UserId", userId);  // Если нужно сохранить в сессии
-        }
-
-        public async Task SignOutAsync(string userId)
-        {
-            await _httpContextAccessor.HttpContext.SignOutAsync("Cookies");
+            return new ClaimsPrincipal(new ClaimsIdentity());
         }
     }
 }

@@ -1,0 +1,20 @@
+﻿@inherits LayoutComponentBase
+
+<div class="unauthorized-layout">
+    @Body
+</div>
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}
+
+<style>
+    .unauthorized-layout {
+        height: 100vh;
+        width: 100vw;
+        background: #000;
+        margin: 0;
+        padding: 0;
+    }
+</style>

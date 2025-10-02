@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.EntityFrameworkCore;
 using TerraformLogViewer.Models;
@@ -17,27 +18,27 @@ namespace TerraformLogViewer
             // Add services to the container.
             builder.Services.AddRazorPages();
             builder.Services.AddServerSideBlazor();
-            //builder.Services.AddHttpContextAccessor();
 
-            //builder.Services.AddDistributedMemoryCache();
-            //builder.Services.AddSession(options =>
-            //{
-            //    options.IdleTimeout = TimeSpan.FromMinutes(30);
-            //    options.Cookie.HttpOnly = true;
-            //    options.Cookie.IsEssential = true;
-            //});
+            // Services Auth
+            builder.Services.AddScoped<AuthService>();
+            builder.Services.AddScoped<CustomAuthStateProvider>();
+            builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
+                sp.GetRequiredService<CustomAuthStateProvider>());
+
+            builder.Services.AddAuthorizationCore();
 
             // Database Configuration
             builder.Services.AddDbContext<AppDbContext>(options =>
                 options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
             // Services
-            //builder.Services.AddScoped<AuthService>();
             builder.Services.AddScoped<LogParserService>();
             builder.Services.AddScoped<VisualizationService>();
             builder.Services.AddScoped<IntegrationService>();
             builder.Services.AddScoped<IUserService, UserService>();
             builder.Services.AddControllers();
+
+            
 
             // HTTP Client
             builder.Services.AddHttpClient<IntegrationService>();

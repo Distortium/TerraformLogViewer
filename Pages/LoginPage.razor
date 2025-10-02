@@ -2,7 +2,10 @@
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Web
 @using TerraformLogViewer.Services
-@inject NavigationManager NavManager
+@inject NavigationManager Navigation
+@inject AuthService AuthService
+@inject CustomAuthStateProvider AuthStateProvider
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IUserService UserService
 @inject IJSRuntime JSRuntime
 
@@ -544,7 +547,6 @@
                 return;
             }
 
-            // Аутентификация через базу данных
             var user = await UserService.Authenticate(_email, _password);
 
             if (user == null)
@@ -554,12 +556,24 @@
                 return;
             }
 
-            // Сохраняем информацию о пользователе
-            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "userEmail", user.Email);
-            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "userId", user.Id.ToString());
+            // Сохраняем аутентификацию
+            var loginResult = await AuthService.LoginAsync(_email, _password);
 
-            // Перенаправляем на главную страницу
-            NavManager.NavigateTo("/", true);
+            if (loginResult)
+            {
+                // Уведомляем систему аутентификации
+                if (AuthStateProvider != null)
+                {
+                    var authStateProvider = AuthStateProvider as CustomAuthStateProvider;
+                    authStateProvider?.NotifyAuthenticationStateChanged();
+                }
+
+                // Ждем обновления состояния
+                await Task.Delay(300);
+
+                // Редирект на главную
+                Navigation.NavigateTo("/", forceLoad: true);
+            }
         }
         catch (Exception ex)
         {
