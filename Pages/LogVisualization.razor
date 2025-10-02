@@ -23,97 +23,99 @@
     <div class="cosmic-layout">
         <!-- Левая панель фильтров -->
         <div class="cosmic-sidebar">
-            <div class="cosmic-panel">
-                <div class="cosmic-panel-header">
-                    <h5>Search & Filters</h5>
-                </div>
-                <div class="cosmic-panel-body">
-                    <div class="cosmic-form-group">
-                        <label class="cosmic-label">Full Text Search</label>
-                        <input @bind="searchCriteria.FreeText"
-                               @bind:event="oninput"
-                               class="cosmic-input"
-                               placeholder="Search in all logs..." />
+            <div class="cosmic-sidebar-content">
+                <div class="cosmic-panel">
+                    <div class="cosmic-panel-header">
+                        <h5>Search & Filters</h5>
                     </div>
+                    <div class="cosmic-panel-body">
+                        <div class="cosmic-form-group">
+                            <label class="cosmic-label">Full Text Search</label>
+                            <input @bind="searchCriteria.FreeText"
+                                   @bind:event="oninput"
+                                   class="cosmic-input"
+                                   placeholder="Search in all logs..." />
+                        </div>
 
-                    <div class="cosmic-form-group">
-                        <label class="cosmic-label">Resource Type</label>
-                        <input @bind="searchCriteria.TfResourceType"
-                               @bind:event="oninput"
-                               class="cosmic-input"
-                               placeholder="e.g., t1_compute_instance" />
-                    </div>
+                        <div class="cosmic-form-group">
+                            <label class="cosmic-label">Resource Type</label>
+                            <input @bind="searchCriteria.TfResourceType"
+                                   @bind:event="oninput"
+                                   class="cosmic-input"
+                                   placeholder="e.g., t1_compute_instance" />
+                        </div>
 
-                    <div class="cosmic-form-group">
-                        <label class="cosmic-label">Time Range</label>
-                        <div class="cosmic-time-grid">
-                            <div class="cosmic-time-column">
-                                <label class="cosmic-label small">From</label>
-                                <input type="datetime-local"
-                                       @bind="startTime"
-                                       class="cosmic-input cosmic-input-sm" />
-                            </div>
-                            <div class="cosmic-time-column">
-                                <label class="cosmic-label small">To</label>
-                                <input type="datetime-local"
-                                       @bind="endTime"
-                                       class="cosmic-input cosmic-input-sm" />
+                        <div class="cosmic-form-group">
+                            <label class="cosmic-label">Time Range</label>
+                            <div class="cosmic-time-grid">
+                                <div class="cosmic-time-column">
+                                    <label class="cosmic-label small">From</label>
+                                    <input type="datetime-local"
+                                           @bind="startTime"
+                                           class="cosmic-input cosmic-input-sm" />
+                                </div>
+                                <div class="cosmic-time-column">
+                                    <label class="cosmic-label small">To</label>
+                                    <input type="datetime-local"
+                                           @bind="endTime"
+                                           class="cosmic-input cosmic-input-sm" />
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="cosmic-form-group">
-                        <label class="cosmic-label">Log Level</label>
-                        <select @bind="selectedLogLevel" class="cosmic-select">
-                            <option value="">All Levels</option>
-                            <option value="Error">Error</option>
-                            <option value="Warn">Warning</option>
-                            <option value="Info">Info</option>
-                            <option value="Debug">Debug</option>
-                        </select>
-                    </div>
+                        <div class="cosmic-form-group">
+                            <label class="cosmic-label">Log Level</label>
+                            <select @bind="selectedLogLevel" class="cosmic-select">
+                                <option value="">All Levels</option>
+                                <option value="Error">Error</option>
+                                <option value="Warn">Warning</option>
+                                <option value="Info">Info</option>
+                                <option value="Debug">Debug</option>
+                            </select>
+                        </div>
 
-                    <div class="cosmic-form-group">
-                        <label class="cosmic-label">Terraform Phase</label>
-                        <select @bind="selectedPhase" class="cosmic-select">
-                            <option value="">All Phases</option>
-                            <option value="Plan">Plan</option>
-                            <option value="Apply">Apply</option>
-                            <option value="Init">Init</option>
-                            <option value="Destroy">Destroy</option>
-                        </select>
-                    </div>
+                        <div class="cosmic-form-group">
+                            <label class="cosmic-label">Terraform Phase</label>
+                            <select @bind="selectedPhase" class="cosmic-select">
+                                <option value="">All Phases</option>
+                                <option value="Plan">Plan</option>
+                                <option value="Apply">Apply</option>
+                                <option value="Init">Init</option>
+                                <option value="Destroy">Destroy</option>
+                            </select>
+                        </div>
 
-                    <div class="cosmic-checkbox-group">
-                        <input type="checkbox"
-                               @bind="searchCriteria.UnreadOnly"
-                               class="cosmic-checkbox" />
-                        <label class="cosmic-checkbox-label">Show Unread Only</label>
-                    </div>
+                        <div class="cosmic-checkbox-group">
+                            <input type="checkbox"
+                                   @bind="searchCriteria.UnreadOnly"
+                                   class="cosmic-checkbox" />
+                            <label class="cosmic-checkbox-label">Show Unread Only</label>
+                        </div>
 
-                    <div class="cosmic-button-group">
-                        <button @onclick="SearchLogs" class="cosmic-btn cosmic-btn-primary">
-                            <i class="fas fa-search"></i> Search
-                        </button>
-                        <button @onclick="ClearFilters" class="cosmic-btn cosmic-btn-secondary">
-                            <i class="fas fa-times"></i> Clear
-                        </button>
+                        <div class="cosmic-button-group">
+                            <button @onclick="SearchLogs" class="cosmic-btn cosmic-btn-primary">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                            <button @onclick="ClearFilters" class="cosmic-btn cosmic-btn-secondary">
+                                <i class="fas fa-times"></i> Clear
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Статистика -->
-            <div class="cosmic-panel cosmic-stats-panel">
-                <div class="cosmic-panel-header">
-                    <h6>Statistics</h6>
-                </div>
-                <div class="cosmic-panel-body">
-                    <div class="cosmic-stats">
-                        <div>Total Results: <strong>@totalRecords</strong></div>
-                        <div>Errors: <span class="cosmic-error"><strong>@errorCount</strong></span></div>
-                        <div>Warnings: <span class="cosmic-warning"><strong>@warningCount</strong></span></div>
-                        <div>Unread: <strong>@unreadCount</strong></div>
-                        <div>Current Page: <strong>@currentPage of @totalPages</strong></div>
+                <!-- Статистика -->
+                <div class="cosmic-panel cosmic-stats-panel">
+                    <div class="cosmic-panel-header">
+                        <h6>Statistics</h6>
+                    </div>
+                    <div class="cosmic-panel-body">
+                        <div class="cosmic-stats">
+                            <div>Total Results: <strong>@totalRecords</strong></div>
+                            <div>Errors: <span class="cosmic-error"><strong>@errorCount</strong></span></div>
+                            <div>Warnings: <span class="cosmic-warning"><strong>@warningCount</strong></span></div>
+                            <div>Unread: <strong>@unreadCount</strong></div>
+                            <div>Current Page: <strong>@currentPage of @totalPages</strong></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -328,7 +330,7 @@
         overflow: hidden;
     }
 
-    /* Левая панель с собственным скроллом */
+    /* Левая панель - с внутренней прокруткой */
     .cosmic-sidebar {
         width: 320px;
         min-width: 320px;
@@ -336,11 +338,40 @@
         backdrop-filter: blur(15px);
         border-right: 1px solid rgba(64, 156, 255, 0.15);
         padding: 1.5rem;
-        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden; /* Убираем внешний скролл */
+    }
+
+    /* Контейнер для содержимого левой панели с прокруткой */
+    .cosmic-sidebar-content {
         display: flex;
         flex-direction: column;
         gap: 1.5rem;
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto; /* Включаем внутреннюю прокрутку */
+        padding-right: 0.5rem; /* Место для скроллбара */
     }
+
+        /* Кастомный скроллбар для левой панели */
+        .cosmic-sidebar-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .cosmic-sidebar-content::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+        }
+
+        .cosmic-sidebar-content::-webkit-scrollbar-thumb {
+            background: rgba(64, 156, 255, 0.3);
+            border-radius: 3px;
+        }
+
+            .cosmic-sidebar-content::-webkit-scrollbar-thumb:hover {
+                background: rgba(64, 156, 255, 0.5);
+            }
 
     /* Основная область */
     .cosmic-main {
@@ -349,7 +380,7 @@
         flex-direction: column;
         padding: 1.5rem;
         overflow: hidden;
-        min-height: 0; /* Важно для flex-скролла */
+        min-height: 0;
     }
 
     /* Область контента с прокруткой */
@@ -383,12 +414,13 @@
         padding: 0.5rem;
     }
 
-    /* Лист логов */
+    /* Лист логов - расширенная высота */
     .cosmic-log-sheet {
         background: rgba(0, 0, 0, 0.3);
         border-radius: 8px;
         border: 1px solid rgba(255, 255, 255, 0.05);
         overflow: hidden;
+        min-height: 600px; /* Минимальная высота для списка */
     }
 
     /* View controls */
@@ -450,7 +482,23 @@
         border-radius: 12px;
         backdrop-filter: blur(15px);
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        flex-shrink: 0; /* Панели не сжимаются */
     }
+
+    /* Панель статистики занимает оставшееся место */
+    .cosmic-stats-panel {
+        flex: 1;
+        min-height: 200px; /* Минимальная высота для статистики */
+        display: flex;
+        flex-direction: column;
+    }
+
+        .cosmic-stats-panel .cosmic-panel-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
 
     .cosmic-panel-header {
         padding: 1rem 1.5rem;
@@ -729,23 +777,14 @@
             background: rgba(64, 156, 255, 0.5);
         }
 
-    .cosmic-sidebar::-webkit-scrollbar {
-        width: 6px;
+    /* Убираем горизонтальный скролл для всего контейнера */
+    .cosmic-container {
+        overflow-x: hidden;
     }
 
-    .cosmic-sidebar::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 3px;
+    .cosmic-layout {
+        overflow-x: hidden;
     }
-
-    .cosmic-sidebar::-webkit-scrollbar-thumb {
-        background: rgba(64, 156, 255, 0.2);
-        border-radius: 3px;
-    }
-
-        .cosmic-sidebar::-webkit-scrollbar-thumb:hover {
-            background: rgba(64, 156, 255, 0.4);
-        }
 
     /* Responsive design */
     @@media (max-width: 768px) {
@@ -758,7 +797,11 @@
             min-width: auto;
             border-right: none;
             border-bottom: 1px solid rgba(64, 156, 255, 0.15);
-            max-height: 40vh;
+            max-height: 60vh;
+        }
+
+        .cosmic-sidebar-content {
+            max-height: none;
         }
 
         .cosmic-view-controls {
@@ -770,6 +813,30 @@
             flex-direction: column;
             gap: 1rem;
             align-items: center;
+        }
+
+        .cosmic-log-sheet {
+            min-height: 400px; /* Меньшая минимальная высота на мобильных */
+        }
+    }
+
+    /* Для очень маленьких экранов */
+    @@media (max-width: 480px) {
+        .cosmic-sidebar {
+            padding: 1rem;
+        }
+
+        .cosmic-main {
+            padding: 1rem;
+        }
+
+        .cosmic-panel-body {
+            padding: 1rem;
+        }
+
+        .cosmic-view-btn {
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
         }
     }
 </style>
