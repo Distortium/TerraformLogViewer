@@ -1,6 +1,9 @@
 # TerraformLogViewer
 Хакатон Т1
 
+Запуск:
+docker-compose up --build
+
 Примеры использования API:
 
 ### Загрузка файла через curl
