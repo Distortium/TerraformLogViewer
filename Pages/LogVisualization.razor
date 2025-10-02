@@ -7,8 +7,21 @@
 <PageTitle>Terraform Log Analyzer - Log Visualization</PageTitle>
 
 <div class="cosmic-container">
+    <!-- Stars background -->
+    <div class="stars-container">
+        <div class="stars-layer">
+            @foreach (var s in Stars)
+            {
+                <span class="star" style="@($"left:{s.Left}%; top:{s.Top}%; width:{s.Size}px; height:{s.Size}px; animation-delay:{s.Delay}s")"></span>
+            }
+        </div>
+    </div>
+
+    <!-- Subtle aurora effect -->
+    <div class="aurora" aria-hidden="true"></div>
+
     <div class="cosmic-layout">
-        <!-- Левая панель фильтров (без изменений по структуре) -->
+        <!-- Левая панель фильтров -->
         <div class="cosmic-sidebar">
             <div class="cosmic-panel">
                 <div class="cosmic-panel-header">
@@ -117,10 +130,10 @@
                 </button>
             </div>
 
-            <div class="cosmic-content-panel">
+            <div class="cosmic-content-area">
                 @if (currentView == ViewType.List)
                 {
-                    <div class="cosmic-panel-body">
+                    <div class="cosmic-content-panel">
                         <!-- Панель управления пагинацией -->
                         <div class="cosmic-pagination-controls">
                             <div class="cosmic-page-size">
@@ -155,13 +168,15 @@
                         }
                         else
                         {
-                            <div class="cosmic-log-sheet">
-                                @foreach (var entry in pagedResults)
-                                {
-                                    <LogEntryView Entry="entry"
-                                                  OnMarkAsRead="MarkAsRead"
-                                                  OnMarkAsUnread="MarkAsUnread" />
-                                }
+                            <div class="cosmic-log-container">
+                                <div class="cosmic-log-sheet">
+                                    @foreach (var entry in pagedResults)
+                                    {
+                                        <LogEntryView Entry="entry"
+                                                      OnMarkAsRead="MarkAsRead"
+                                                      OnMarkAsUnread="MarkAsUnread" />
+                                    }
+                                </div>
                             </div>
 
                             <!-- Пагинация -->
@@ -205,7 +220,7 @@
                 }
                 else
                 {
-                    <div class="cosmic-panel-body">
+                    <div class="cosmic-content-panel">
                         <TimelineView LogFileId="LogFileId" />
                     </div>
                 }
@@ -215,92 +230,232 @@
 </div>
 
 <style>
+    /* Reset and base styles */
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    /* Main container - занимает 100% высоты экрана */
     .cosmic-container {
-        background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
-        min-height: 100vh;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: #000000;
+        overflow: hidden;
         color: #e0e0e0;
         font-family: 'Segoe UI', system-ui, sans-serif;
     }
 
+    /* Aurora background effect */
+    .aurora {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(45deg, rgba(216, 67, 21, 0.08) 0%, rgba(255, 112, 67, 0.06) 25%, rgba(0, 0, 0, 0) 50%, rgba(216, 67, 21, 0.04) 75%, rgba(255, 112, 67, 0.08) 100%);
+        background-size: 400% 400%;
+        animation: aurora-shift 20s ease infinite;
+        z-index: 1;
+    }
+
+    @@keyframes aurora-shift {
+        0% {
+            background-position: 0% 50%;
+        }
+
+        50% {
+            background-position: 100% 50%;
+        }
+
+        100% {
+            background-position: 0% 50%;
+        }
+    }
+
+    /* Stars container */
+    .stars-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 2;
+    }
+
+    .stars-layer {
+        position: relative;
+        width: 100%;
+        height: 100%;
+    }
+
+    .star {
+        position: absolute;
+        background-color: white;
+        border-radius: 50%;
+        animation: twinkle 4s infinite;
+        opacity: 0;
+    }
+
+    @@keyframes twinkle {
+        0% {
+            opacity: 0;
+            transform: scale(0.8);
+        }
+
+        50% {
+            opacity: 1;
+            transform: scale(1.2);
+        }
+
+        100% {
+            opacity: 0;
+            transform: scale(0.8);
+        }
+    }
+
+    /* Основной layout */
     .cosmic-layout {
         display: flex;
-        min-height: 100vh;
+        height: 100vh;
+        position: relative;
+        z-index: 3;
+        overflow: hidden;
     }
 
+    /* Левая панель с собственным скроллом */
     .cosmic-sidebar {
         width: 320px;
-        background: rgba(15, 15, 25, 0.8);
-        backdrop-filter: blur(10px);
-        border-right: 1px solid rgba(64, 156, 255, 0.1);
+        min-width: 320px;
+        background: rgba(5, 5, 10, 0.7);
+        backdrop-filter: blur(15px);
+        border-right: 1px solid rgba(64, 156, 255, 0.15);
         padding: 1.5rem;
         overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
     }
 
+    /* Основная область */
     .cosmic-main {
         flex: 1;
         display: flex;
         flex-direction: column;
         padding: 1.5rem;
+        overflow: hidden;
+        min-height: 0; /* Важно для flex-скролла */
     }
 
+    /* Область контента с прокруткой */
+    .cosmic-content-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-height: 0;
+    }
+
+    /* Контентная панель */
+    .cosmic-content-panel {
+        background: rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        backdrop-filter: blur(20px);
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
+        min-height: 0;
+    }
+
+    /* Контейнер для логов с прокруткой */
+    .cosmic-log-container {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+        padding: 0.5rem;
+    }
+
+    /* Лист логов */
+    .cosmic-log-sheet {
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        overflow: hidden;
+    }
+
+    /* View controls */
     .cosmic-view-controls {
         display: flex;
         justify-content: center;
         gap: 1rem;
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
+        flex-shrink: 0;
     }
 
     .cosmic-view-btn {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(64, 156, 255, 0.3);
+        background: rgba(0, 0, 0, 0.6);
+        border: 1px solid rgba(64, 156, 255, 0.4);
         color: #e0e0e0;
         padding: 0.75rem 1.5rem;
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.3s ease;
         backdrop-filter: blur(10px);
+        font-weight: 500;
     }
 
         .cosmic-view-btn:hover {
             border-color: #409cff;
-            background: rgba(64, 156, 255, 0.1);
+            background: rgba(64, 156, 255, 0.15);
+            box-shadow: 0 0 15px rgba(64, 156, 255, 0.3);
         }
 
     .cosmic-view-active {
-        background: rgba(64, 156, 255, 0.2);
+        background: rgba(64, 156, 255, 0.25);
         border-color: #409cff;
-        box-shadow: 0 0 20px rgba(64, 156, 255, 0.3);
+        box-shadow: 0 0 25px rgba(64, 156, 255, 0.4);
+        color: #ffffff;
     }
 
-    .cosmic-content-panel {
-        background: rgba(255, 255, 255, 0.02);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        backdrop-filter: blur(10px);
-        flex: 1;
+    /* Пагинация controls - фиксированные вверху */
+    .cosmic-pagination-controls {
         display: flex;
-        flex-direction: column;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(0, 0, 0, 0.3);
+        flex-shrink: 0;
     }
 
-    .cosmic-log-sheet {
-        background: rgba(255, 255, 255, 0.02);
-        border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        overflow: hidden;
+    /* Пагинация внизу */
+    .cosmic-pagination {
+        padding: 1.5rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(0, 0, 0, 0.3);
+        flex-shrink: 0;
     }
 
     .cosmic-panel {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.06);
         border-radius: 12px;
-        margin-bottom: 1.5rem;
-        backdrop-filter: blur(10px);
+        backdrop-filter: blur(15px);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
     }
 
     .cosmic-panel-header {
         padding: 1rem 1.5rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        background: rgba(0, 0, 0, 0.3);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(0, 0, 0, 0.5);
     }
 
         .cosmic-panel-header h5,
@@ -321,14 +476,14 @@
     .cosmic-label {
         display: block;
         margin-bottom: 0.5rem;
-        color: #b0b0b0;
+        color: #a0a0a0;
         font-size: 0.9rem;
         font-weight: 500;
     }
 
     .cosmic-input {
         width: 100%;
-        background: rgba(255, 255, 255, 0.05);
+        background: rgba(0, 0, 0, 0.6);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 6px;
         padding: 0.75rem;
@@ -340,7 +495,8 @@
         .cosmic-input:focus {
             outline: none;
             border-color: #409cff;
-            box-shadow: 0 0 0 2px rgba(64, 156, 255, 0.2);
+            box-shadow: 0 0 0 2px rgba(64, 156, 255, 0.15);
+            background: rgba(0, 0, 0, 0.8);
         }
 
     .cosmic-input-sm {
@@ -350,7 +506,7 @@
 
     .cosmic-select {
         width: 100%;
-        background: rgba(255, 255, 255, 0.05);
+        background: rgba(0, 0, 0, 0.6);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 6px;
         padding: 0.75rem;
@@ -379,10 +535,11 @@
 
     .cosmic-checkbox {
         margin: 0;
+        accent-color: #409cff;
     }
 
     .cosmic-checkbox-label {
-        color: #b0b0b0;
+        color: #a0a0a0;
         font-size: 0.9rem;
     }
 
@@ -406,47 +563,44 @@
     .cosmic-btn-primary {
         background: linear-gradient(135deg, #409cff 0%, #0066cc 100%);
         color: white;
+        box-shadow: 0 2px 10px rgba(64, 156, 255, 0.3);
     }
 
         .cosmic-btn-primary:hover {
-            box-shadow: 0 0 20px rgba(64, 156, 255, 0.4);
-            transform: translateY(-1px);
+            box-shadow: 0 4px 20px rgba(64, 156, 255, 0.5);
+            transform: translateY(-2px);
         }
 
     .cosmic-btn-secondary {
-        background: rgba(255, 255, 255, 0.05);
+        background: rgba(0, 0, 0, 0.4);
         color: #e0e0e0;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.15);
     }
 
         .cosmic-btn-secondary:hover {
             background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.25);
         }
 
     .cosmic-stats-panel {
-        background: rgba(64, 156, 255, 0.05);
-        border-color: rgba(64, 156, 255, 0.2);
+        background: rgba(64, 156, 255, 0.1);
+        border-color: rgba(64, 156, 255, 0.25);
     }
 
     .cosmic-stats {
         font-size: 0.85rem;
         line-height: 1.6;
+        color: #c0c0c0;
     }
 
     .cosmic-error {
         color: #ff6b6b;
+        text-shadow: 0 0 5px rgba(255, 107, 107, 0.3);
     }
 
     .cosmic-warning {
         color: #ffd93d;
-    }
-
-    .cosmic-pagination-controls {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 1.5rem;
+        text-shadow: 0 0 5px rgba(255, 217, 61, 0.3);
     }
 
     .cosmic-page-size {
@@ -456,7 +610,7 @@
     }
 
     .cosmic-page-info {
-        color: #b0b0b0;
+        color: #a0a0a0;
         font-size: 0.9rem;
     }
 
@@ -466,7 +620,8 @@
         align-items: center;
         justify-content: center;
         padding: 3rem;
-        color: #b0b0b0;
+        color: #a0a0a0;
+        flex: 1;
     }
 
     .cosmic-spinner {
@@ -492,17 +647,18 @@
     .cosmic-empty-state {
         text-align: center;
         padding: 3rem;
-        color: #b0b0b0;
+        color: #a0a0a0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
     }
 
     .cosmic-empty-icon {
         font-size: 3rem;
         margin-bottom: 1rem;
         opacity: 0.5;
-    }
-
-    .cosmic-pagination {
-        margin-top: 2rem;
     }
 
     .cosmic-pagination-list {
@@ -519,7 +675,7 @@
     }
 
     .cosmic-page-link {
-        background: rgba(255, 255, 255, 0.05);
+        background: rgba(0, 0, 0, 0.4);
         border: 1px solid rgba(255, 255, 255, 0.1);
         color: #e0e0e0;
         padding: 0.5rem 0.75rem;
@@ -528,29 +684,94 @@
         border-radius: 4px;
         min-width: 2.5rem;
         text-align: center;
+        backdrop-filter: blur(10px);
     }
 
         .cosmic-page-link:hover {
-            background: rgba(64, 156, 255, 0.1);
+            background: rgba(64, 156, 255, 0.15);
             border-color: #409cff;
         }
 
     .cosmic-page-active .cosmic-page-link {
-        background: rgba(64, 156, 255, 0.2);
+        background: rgba(64, 156, 255, 0.25);
         border-color: #409cff;
         color: #ffffff;
+        box-shadow: 0 0 10px rgba(64, 156, 255, 0.3);
     }
 
     .cosmic-page-disabled .cosmic-page-link {
         opacity: 0.3;
         cursor: not-allowed;
-        background: rgba(255, 255, 255, 0.02);
+        background: rgba(255, 255, 255, 0.05);
     }
 
         .cosmic-page-disabled .cosmic-page-link:hover {
-            background: rgba(255, 255, 255, 0.02);
+            background: rgba(255, 255, 255, 0.05);
             border-color: rgba(255, 255, 255, 0.1);
         }
+
+    /* Custom scrollbar for webkit browsers */
+    .cosmic-log-container::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .cosmic-log-container::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+    }
+
+    .cosmic-log-container::-webkit-scrollbar-thumb {
+        background: rgba(64, 156, 255, 0.3);
+        border-radius: 4px;
+    }
+
+        .cosmic-log-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(64, 156, 255, 0.5);
+        }
+
+    .cosmic-sidebar::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .cosmic-sidebar::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 3px;
+    }
+
+    .cosmic-sidebar::-webkit-scrollbar-thumb {
+        background: rgba(64, 156, 255, 0.2);
+        border-radius: 3px;
+    }
+
+        .cosmic-sidebar::-webkit-scrollbar-thumb:hover {
+            background: rgba(64, 156, 255, 0.4);
+        }
+
+    /* Responsive design */
+    @@media (max-width: 768px) {
+        .cosmic-layout {
+            flex-direction: column;
+        }
+
+        .cosmic-sidebar {
+            width: 100%;
+            min-width: auto;
+            border-right: none;
+            border-bottom: 1px solid rgba(64, 156, 255, 0.15);
+            max-height: 40vh;
+        }
+
+        .cosmic-view-controls {
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .cosmic-pagination-controls {
+            flex-direction: column;
+            gap: 1rem;
+            align-items: center;
+        }
+    }
 </style>
 
 @code {
@@ -581,9 +802,32 @@
     private int warningCount = 0;
     private int unreadCount = 0;
 
+    // Stars for background
+    private List<StarModel> Stars = new();
+
     protected override async Task OnInitializedAsync()
     {
+        Stars = GenerateStars(80);
         await LoadInitialData();
+    }
+
+    private List<StarModel> GenerateStars(int count)
+    {
+        var stars = new List<StarModel>();
+        var random = new Random();
+
+        for (int i = 0; i < count; i++)
+        {
+            stars.Add(new StarModel
+            {
+                Left = random.Next(0, 100),
+                Top = random.Next(0, 100),
+                Size = random.Next(1, 3),
+                Delay = random.NextDouble() * 5
+            });
+        }
+
+        return stars;
     }
 
     private async Task LoadInitialData()
@@ -735,5 +979,13 @@
         pageSize = newSizePage;
         currentPage = 1;
         await LoadInitialData();
+    }
+
+    public class StarModel
+    {
+        public double Left { get; set; }
+        public double Top { get; set; }
+        public double Size { get; set; }
+        public double Delay { get; set; }
     }
 }

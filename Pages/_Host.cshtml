@@ -14,12 +14,412 @@
     <link href="css/log-visualization.css" rel="stylesheet" />
     <link href="css/timeline.css" rel="stylesheet" />
     <link href="TerraformLogViewer.styles.css" rel="stylesheet" />
-    <link rel="icon" type="image/png" href="favicon.png"/>
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <component type="typeof(HeadOutlet)" render-mode="ServerPrerendered" />
+
+    <style>
+        /* Reset and base styles */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #000000;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* Stars background */
+        .stars-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .stars-layer {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .star {
+            position: absolute;
+            background-color: white;
+            border-radius: 50%;
+            animation: twinkle 4s infinite;
+            opacity: 0;
+        }
+
+        @@keyframes twinkle {
+            0% {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+
+            50% {
+                opacity: 1;
+                transform: scale(1.2);
+            }
+
+            100% {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+        }
+
+        /* Aurora background effect */
+        .aurora {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, rgba(216, 67, 21, 0.08) 0%, rgba(255, 112, 67, 0.06) 25%, rgba(0, 0, 0, 0) 50%, rgba(216, 67, 21, 0.04) 75%, rgba(255, 112, 67, 0.08) 100%);
+            background-size: 400% 400%;
+            animation: aurora-shift 20s ease infinite;
+            z-index: 2;
+        }
+
+        @@keyframes aurora-shift {
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        /* Main app container - центрированный */
+        #app {
+            position: relative;
+            z-index: 3;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        /* Центральный контейнер для контента */
+        .central-container {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        /* Cosmic panel styling */
+        .cosmic-panel {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            backdrop-filter: blur(20px);
+            padding: 3rem;
+            margin: 2rem 0;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 600px;
+        }
+
+        /* Hero section */
+        .hero-section {
+            margin-bottom: 3rem;
+        }
+
+        .hero-title {
+            font-size: 3.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #409cff 0%, #ff6b6b 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1rem;
+        }
+
+        .hero-subtitle {
+            font-size: 1.2rem;
+            color: #a0a0a0;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        /* Feature cards */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            margin: 3rem 0;
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .feature-card {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 2rem;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+            .feature-card:hover {
+                transform: translateY(-5px);
+                border-color: rgba(64, 156, 255, 0.3);
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            }
+
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: #409cff;
+        }
+
+        .feature-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #ffffff;
+        }
+
+        .feature-description {
+            color: #a0a0a0;
+            line-height: 1.6;
+        }
+
+        /* Action buttons */
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .cosmic-btn {
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .cosmic-btn-primary {
+            background: linear-gradient(135deg, #409cff 0%, #0066cc 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(64, 156, 255, 0.3);
+        }
+
+            .cosmic-btn-primary:hover {
+                box-shadow: 0 6px 25px rgba(64, 156, 255, 0.5);
+                transform: translateY(-2px);
+            }
+
+        .cosmic-btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+            .cosmic-btn-secondary:hover {
+                background: rgba(255, 255, 255, 0.15);
+                border-color: rgba(255, 255, 255, 0.3);
+                transform: translateY(-2px);
+            }
+
+        /* Stats section */
+        .stats-section {
+            display: flex;
+            gap: 3rem;
+            margin: 3rem 0;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #409cff;
+            display: block;
+        }
+
+        .stat-label {
+            color: #a0a0a0;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        /* Footer */
+        .cosmic-footer {
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: #a0a0a0;
+            text-align: center;
+            width: 100%;
+        }
+
+        /* Blazor error UI - restyled */
+        #blazor-error-ui {
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 112, 67, 0.3);
+            color: #e0e0e0;
+            padding: 1rem;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            display: none;
+        }
+
+            #blazor-error-ui .reload {
+                background: linear-gradient(135deg, #409cff 0%, #0066cc 100%);
+                color: white;
+                border: none;
+                padding: 0.5rem 1rem;
+                border-radius: 4px;
+                cursor: pointer;
+                margin-right: 1rem;
+                text-decoration: none;
+            }
+
+            #blazor-error-ui .dismiss {
+                color: #a0a0a0;
+                cursor: pointer;
+                float: right;
+            }
+
+        /* Loading indicator */
+        .loading-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .cosmic-spinner {
+            width: 3rem;
+            height: 3rem;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-left: 3px solid #409cff;
+            border-radius: 50%;
+            animation: cosmic-spin 1s linear infinite;
+        }
+
+        @@keyframes cosmic-spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loading-text {
+            color: #a0a0a0;
+            font-size: 1.1rem;
+        }
+
+        /* Responsive design */
+        @@media (max-width: 768px) {
+            .hero-title {
+                font-size: 2.5rem;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .cosmic-btn {
+                width: 100%;
+                max-width: 300px;
+                justify-content: center;
+            }
+
+            .stats-section {
+                gap: 2rem;
+            }
+
+            .cosmic-panel {
+                padding: 2rem;
+                margin: 1rem;
+            }
+        }
+
+        @@media (max-width: 480px) {
+            .hero-title {
+                font-size: 2rem;
+            }
+
+            .hero-subtitle {
+                font-size: 1rem;
+            }
+
+            #app {
+                padding: 1rem;
+            }
+        }
+    </style>
 </head>
 <body>
-    <component type="typeof(App)" render-mode="ServerPrerendered" />
+    <!-- Stars Background -->
+    <div class="stars-container" id="stars-container">
+        <div class="stars-layer">
+            <!-- Stars will be generated by JavaScript -->
+        </div>
+    </div>
 
+    <!-- Aurora Effect -->
+    <div class="aurora" aria-hidden="true"></div>
+
+    <!-- Main App - Центрированный контент -->
+    <div id="app">
+        <div class="central-container">
+            <!-- Если App еще не загружен, показываем заглушку -->
+            <component type="typeof(App)" render-mode="ServerPrerendered" />
+        </div>
+    </div>
+
+    <!-- Blazor Error UI -->
     <div id="blazor-error-ui">
         <environment include="Staging,Production">
             An error has occurred. This application may no longer respond until reloaded.
@@ -33,5 +433,53 @@
 
     <script src="_framework/blazor.server.js"></script>
     <script src="~/js/app.js"></script>
+
+    <script>
+        // Generate stars for background
+        function generateStars(count, container) {
+            const starsLayer = container.querySelector('.stars-layer');
+            starsLayer.innerHTML = '';
+
+            for (let i = 0; i < count; i++) {
+                const star = document.createElement('span');
+                star.className = 'star';
+
+                const left = Math.random() * 100;
+                const top = Math.random() * 100;
+                const size = Math.random() * 2 + 1;
+                const delay = Math.random() * 5;
+
+                star.style.left = left + '%';
+                star.style.top = top + '%';
+                star.style.width = size + 'px';
+                star.style.height = size + 'px';
+                star.style.animationDelay = delay + 's';
+
+                starsLayer.appendChild(star);
+            }
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            const starsContainer = document.getElementById('stars-container');
+            generateStars(150, starsContainer);
+        });
+
+        // Show loading state while Blazor is loading
+        window.showLoading = function() {
+            const app = document.getElementById('app');
+            if (app && app.querySelector('.central-container').children.length === 0) {
+                app.querySelector('.central-container').innerHTML = `
+                    <div class="loading-container">
+                        <div class="cosmic-spinner"></div>
+                        <div class="loading-text">Initializing Terraform Log Analyzer...</div>
+                    </div>
+                `;
+            }
+        };
+
+        // Call loading function
+        window.showLoading();
+    </script>
 </body>
 </html>
