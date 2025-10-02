@@ -3,120 +3,122 @@
 @inject NavigationManager Navigation
 @inject AuthService AuthService
 @inject IJSRuntime JSRuntime
+@inject CustomAuthStateProvider AuthStateProvider
 
-<PageTitle>Index</PageTitle>
+<PageTitle>Terraform Log Viewer</PageTitle>
 
 <AuthRedirect>
-<div class="container-fluid">
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h4>Upload Terraform Logs</h4>
-                    <button class="btn btn-outline-secondary" @onclick="Logout">
-                        <i class="fas fa-sign-out-alt"></i> Logout
-                    </button>
-                </div>
-                <div class="card-body">
-                    <div class="upload-area" @ondragover="HandleDragOver" @ondrop="HandleDrop">
-                <InputFile id="fileInput" OnChange="HandleFileSelected" multiple accept=".log,.txt,.json" style="display: none;" />
-
-                        <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
-                        <h5>Drag & Drop log files here</h5>
-                        <p class="text-muted">Supported formats: .log, .txt, .json</p>
-                        <button class="btn btn-primary" @onclick="OpenFileDialog">
-                            <i class="fas fa-folder-open me-2"></i>Select Files
+    <div class="container-fluid">
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h4>Upload Terraform Logs</h4>
+                        <button class="btn btn-outline-secondary" @onclick="Logout">
+                            <i class="fas fa-sign-out-alt"></i> Logout
                         </button>
                     </div>
+                    <div class="card-body">
+                        <div class="upload-area" @ondragover="HandleDragOver" @ondrop="HandleDrop">
+                            <InputFile id="fileInput" OnChange="HandleFileSelected" multiple accept=".log,.txt,.json" style="display: none;" />
 
-                    @if (uploadProgress > 0)
-                    {
-                        <div class="mt-3">
-                            <div class="progress">
-                                <div class="progress-bar" style="width: @uploadProgress%">
-                                    @uploadProgress%
+                            <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                            <h5>Drag & Drop log files here</h5>
+                            <p class="text-muted">Supported formats: .log, .txt, .json</p>
+                            <button class="btn btn-primary" @onclick="OpenFileDialog">
+                                <i class="fas fa-folder-open me-2"></i>Select Files
+                            </button>
+                        </div>
+
+                        @if (uploadProgress > 0)
+                        {
+                            <div class="mt-3">
+                                <div class="progress">
+                                    <div class="progress-bar" style="width: @uploadProgress%">
+                                        @uploadProgress%
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    }
+                        }
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5>Upload History</h5>
-                </div>
-                <div class="card-body">
-                    @if (logFiles.Any())
-                    {
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>File Name</th>
-                                        <th>Type</th>
-                                        <th>Size</th>
-                                        <th>Uploaded</th>
-                                        <th>Entries</th>
-                                        <th>Errors</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var file in logFiles)
-                                    {
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Upload History</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (logFiles.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
                                         <tr>
-                                            <td>@file.FileName</td>
-                                            <td>
-                                                <span class="badge bg-secondary">@file.FileType</span>
-                                            </td>
-                                            <td>@FormatFileSize(file.FileSize)</td>
-                                            <td>@file.UploadedAt.ToString("MMM dd, yyyy HH:mm")</td>
-                                            <td>@file.TotalEntries</td>
-                                            <td>
-                                                @if (file.ErrorCount > 0)
-                                                {
-                                                    <span class="text-danger">@file.ErrorCount</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-success">0</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                <button class="btn btn-sm btn-outline-primary"
-                                                        @onclick="() => ViewLogs(file.Id)">
-                                                    <i class="fas fa-eye"></i> View
-                                                </button>
-                                            </td>
+                                            <th>File Name</th>
+                                            <th>Type</th>
+                                            <th>Size</th>
+                                            <th>Uploaded</th>
+                                            <th>Entries</th>
+                                            <th>Errors</th>
+                                            <th>Actions</th>
                                         </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="text-center text-muted py-4">
-                            <i class="fas fa-inbox fa-3x mb-3"></i>
-                            <p>No log files uploaded yet.</p>
-                        </div>
-                    }
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var file in logFiles)
+                                        {
+                                            <tr>
+                                                <td>@file.FileName</td>
+                                                <td>
+                                                    <span class="badge bg-secondary">@file.FileType</span>
+                                                </td>
+                                                <td>@FormatFileSize(file.FileSize)</td>
+                                                <td>@file.UploadedAt.ToString("MMM dd, yyyy HH:mm")</td>
+                                                <td>@file.TotalEntries</td>
+                                                <td>
+                                                    @if (file.ErrorCount > 0)
+                                                    {
+                                                        <span class="text-danger">@file.ErrorCount</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-success">0</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary"
+                                                            @onclick="() => ViewLogs(file.Id)">
+                                                        <i class="fas fa-eye"></i> View
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-3x mb-3"></i>
+                                <p>No log files uploaded yet.</p>
+                            </div>
+                        }
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
-</AuthRedirect>>
+</AuthRedirect>
 
 @code {
     private List<LogFile> logFiles = new();
     private int uploadProgress = 0;
     private Guid? currentUserId = null;
+    private bool isLoading = true;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -129,26 +131,49 @@
         await base.OnAfterRenderAsync(firstRender);
     }
 
+    protected override void OnInitialized()
+    {
+        isLoading = false;
+    }
+
     private async Task LoadCurrentUser()
     {
-        currentUserId = await AuthService.GetCurrentUserIdAsync();
-
-        if (currentUserId == null)
+        try
         {
-            Logout();
-            return;
-        }
+            currentUserId = await AuthService.GetCurrentUserIdAsync();
 
-        Console.WriteLine($"Current user ID: {currentUserId}");
+            if (currentUserId == null)
+            {
+                Console.WriteLine("User ID is null - redirecting to login");
+                await Logout();
+                return;
+            }
+
+            Console.WriteLine($"Current user ID: {currentUserId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading current user: {ex.Message}");
+            await Logout();
+        }
     }
 
     private async Task OpenFileDialog()
     {
-        await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('fileInput').click()");
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('fileInput').click()");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error opening file dialog: {ex.Message}");
+        }
     }
 
     private async Task HandleFileSelected(InputFileChangeEventArgs e)
     {
+        if (e.FileCount == 0) return;
+
         foreach (var file in e.GetMultipleFiles())
         {
             await UploadFile(file);
@@ -159,26 +184,22 @@
     {
         if (currentUserId == null)
         {
-            await LoadCurrentUser();
-            if (currentUserId == null)
-                return;
+            await JSRuntime.InvokeVoidAsync("alert", "User not authenticated. Please log in again.");
+            return;
         }
 
         try
         {
-            try
-            {
-                uploadProgress = 10;
-                StateHasChanged();
+            uploadProgress = 10;
+            StateHasChanged();
 
-                using var stream = file.OpenReadStream(100 * 1024 * 1024); // 100MB max
-                var fileType = file.Name.EndsWith(".json") ? "JSON" : "Text";
+            using var stream = file.OpenReadStream(100 * 1024 * 1024); // 100MB max
+            var fileType = file.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ? "JSON" : "Text";
 
-                uploadProgress = 50;
-                StateHasChanged();
+            uploadProgress = 50;
+            StateHasChanged();
 
-            var lfile = await LogParserService.ParseAndStoreLogsAsync(stream, file.Name, currentUserId.Value, fileType);
-
+            var logFile = await LogParserService.ParseAndStoreLogsAsync(stream, file.Name, currentUserId.Value, fileType);
 
             uploadProgress = 100;
             StateHasChanged();
@@ -188,11 +209,11 @@
 
             await LoadLogFiles(); // Refresh the list
 
-            await JSRuntime.InvokeVoidAsync("alert", $"File {file.Name} uploaded successfully!");
+            await JSRuntime.InvokeVoidAsync("alert", $"File '{file.Name}' uploaded successfully!");
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error uploading {file.Name}: {ex.Message}");
+            await JSRuntime.InvokeVoidAsync("alert", $"Error uploading '{file.Name}': {ex.Message}");
             uploadProgress = 0;
             StateHasChanged();
         }
@@ -200,33 +221,31 @@
 
     private void HandleDragOver(DragEventArgs e)
     {
-        // Allow drop
+        
     }
 
     private async void HandleDrop(DragEventArgs e)
     {
-        // This would need JavaScript interop for file access in Blazor Server
-        await JSRuntime.InvokeVoidAsync("alert", "File drop support requires additional JavaScript setup");
+        await JSRuntime.InvokeVoidAsync("alert", "File drop support requires additional JavaScript setup. Please use the file selector.");
     }
 
     private async Task LoadLogFiles()
     {
-        if (currentUserId != null)
+        if (currentUserId == null) return;
+
+        try
         {
-            try
+            var userFiles = await LogParserService.GetUserLogFilesAsync(currentUserId.Value);
+            if (userFiles != null)
             {
-                // Здесь должен быть вызов сервиса для загрузки файлов пользователя
-                var tempFiles = await LogParserService.GetUserLogFilesAsync(currentUserId.Value);
-
-                if (tempFiles != null)
-                    logFiles = tempFiles;
-
+                logFiles = userFiles;
                 StateHasChanged();
             }
-            catch (Exception ex)
-            {
-                await JSRuntime.InvokeVoidAsync("console.error", $"Error loading log files: {ex.Message}");
-            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading log files: {ex.Message}");
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading log files: {ex.Message}");
         }
     }
 
@@ -235,22 +254,35 @@
         Navigation.NavigateTo($"/logs/{fileId}");
     }
 
-    private void Logout()
+    private async Task Logout()
     {
-        //AuthService.Logout();
-        Navigation.NavigateTo("/login", true);
+        try
+        {
+            await AuthService.LogoutAsync();
+            AuthStateProvider.NotifyAuthenticationStateChanged();
+            Navigation.NavigateTo("/login", true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during logout: {ex.Message}");
+            Navigation.NavigateTo("/login", true);
+        }
     }
 
     private string FormatFileSize(long bytes)
     {
+        if (bytes == 0) return "0 B";
+
         string[] sizes = { "B", "KB", "MB", "GB" };
         int order = 0;
         double len = bytes;
+
         while (len >= 1024 && order < sizes.Length - 1)
         {
             order++;
             len /= 1024;
         }
+
         return $"{len:0.##} {sizes[order]}";
     }
 }
